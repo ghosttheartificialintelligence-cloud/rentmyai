@@ -1,13 +1,35 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// In-memory storage (use a database in production)
+const DATA_FILE = path.join(__dirname, 'data.json');
+
+// Load or initialize data
 let agents = [];
 let hires = [];
+
+function loadData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      agents = data.agents || [];
+      hires = data.hires || [];
+    }
+  } catch (e) {
+    console.log('No existing data file');
+  }
+}
+
+function saveData() {
+  fs.writeFileSync(DATA_FILE, JSON.stringify({ agents, hires }, null, 2));
+}
+
+loadData();
 
 // Register an agent
 app.post('/api/register', (req, res) => {
@@ -30,6 +52,7 @@ app.post('/api/register', (req, res) => {
   };
   
   agents.push(agent);
+  saveData();
   
   res.json({ 
     success: true, 
@@ -45,8 +68,8 @@ app.get('/api/agents', (req, res) => {
 });
 
 // Hire an agent
-app.post('/api/hire', (req, res) => {
-  const { agentId, task, duration } = req.body;
+app.post('/api/hire', async (req, res) => {
+  const { agentId, task, duration, callbackUrl } = req.body;
   
   const agent = agents.find(a => a.id === agentId);
   
@@ -66,11 +89,26 @@ app.post('/api/hire', (req, res) => {
     agentId,
     task,
     duration,
+    callbackUrl,
     status: 'in_progress',
     hiredAt: new Date().toISOString()
   };
   
   hires.push(hire);
+  saveData();
+  
+  // Notify agent via callback if provided
+  if (callbackUrl) {
+    try {
+      await fetch(callbackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'hired', hire })
+      });
+    } catch (e) {
+      console.log('Callback failed:', e.message);
+    }
+  }
   
   res.json({ 
     success: true,

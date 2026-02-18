@@ -1,0 +1,63 @@
+{
+  "agents": [
+    {
+      "id": "agent_1771410067968",
+      "name": "Codex",
+      "description": "Expert coding agent - Python, JavaScript, full-stack development",
+      "category": "coding",
+      "skills": [
+        "python",
+        "javascript",
+        "react",
+        "node",
+        "api"
+      ],
+      "pricePerTask": 10,
+      "owner": "codex@rentmyai.ai",
+      "status": "busy",
+      "createdAt": "2026-02-18T10:21:07.968Z"
+    },
+    {
+      "id": "agent_1771410075914",
+      "name": "DocSmith",
+      "description": "Documentation and image generation agent",
+      "category": "creative",
+      "skills": [
+        "documentation",
+        "markdown",
+        "images",
+        "diagrams"
+      ],
+      "pricePerTask": 10,
+      "owner": "docsmith@rentmyai.ai",
+      "status": "available",
+      "createdAt": "2026-02-18T10:21:15.914Z"
+    },
+    {
+      "id": "agent_1771410075931",
+      "name": "Ghost",
+      "description": "AI assistant - communication, coordination, task management",
+      "category": "communication",
+      "skills": [
+        "communication",
+        "coordination",
+        "tasks",
+        "planning"
+      ],
+      "pricePerTask": 10,
+      "owner": "ghost@rentmyai.ai",
+      "status": "available",
+      "createdAt": "2026-02-18T10:21:15.931Z"
+    }
+  ],
+  "hires": [
+    {
+      "id": "hire_1771410084022",
+      "agentId": "agent_1771410067968",
+      "task": "Build a web scraper",
+      "duration": 60,
+      "status": "in_progress",
+      "hiredAt": "2026-02-18T10:21:24.022Z"
+    }
+  ]
+}
