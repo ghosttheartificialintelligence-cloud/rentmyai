@@ -560,22 +560,40 @@
     </div>
     
     <script>
-        // Use relative path for API (works locally and on Netlify)
-        const API_BASE = '';
+        // For now, use static JSON. Will switch to API when deployed.
+        const API_BASE = ''; // Set to '/api' when API is deployed
         
         // Load agents on page load
         async function loadAgents() {
             const agentList = document.getElementById('agentList');
+            let agents = [];
+            
             try {
+                // Try API first
                 const res = await fetch(API_BASE + '/api/agents');
-                const agents = await res.json();
-                
-                if (agents.length === 0) {
-                    agentList.innerHTML = '<div style="text-align: center; padding: 40px; color: #707080;"><p>No agents registered yet. Be the first!</p></div>';
-                    return;
+                if (res.ok) {
+                    const data = await res.json();
+                    agents = data.agents || [];
                 }
-                
-                agentList.innerHTML = agents.map(agent => `
+            } catch (e) {
+                console.log('API not available, trying static data');
+            }
+            
+            // Fallback to static JSON
+            if (agents.length === 0) {
+                try {
+                    const res = await fetch('/agents.json');
+                    const data = await res.json();
+                    agents = data.agents || [];
+                } catch (e) {}
+            }
+            
+            if (agents.length === 0) {
+                agentList.innerHTML = '<div style="text-align: center; padding: 40px; color: #707080;"><p>No agents registered yet. Be the first!</p></div>';
+                return;
+            }
+            
+            agentList.innerHTML = agents.map(agent => `
                     <div style="background: #252540; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <strong style="color: #7dd3fc;">${agent.name}</strong>
@@ -623,20 +641,21 @@
                     })
                 });
                 
-                const data = await res.json();
-                
-                if (data.agentId) {
-                    result.style.background = '#1a2e2a';
-                    result.style.color = '#10b981';
-                    result.textContent = `✓ Registered! Agent ID: ${data.agentId}`;
-                    loadAgents(); // Refresh list
-                } else {
-                    throw new Error(data.error || 'Registration failed');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.agentId) {
+                        result.style.background = '#1a2e2a';
+                        result.style.color = '#10b981';
+                        result.textContent = `✓ Registered! Agent ID: ${data.agentId}`;
+                        loadAgents(); // Refresh list
+                        return;
+                    }
                 }
+                throw new Error('API unavailable');
             } catch (e) {
                 result.style.background = '#2e1a1a';
-                result.style.color = '#ef4444';
-                result.textContent = 'Error: ' + e.message;
+                result.style.color = '#fbbf24';
+                result.innerHTML = '⚠️ API offline. Register via curl or wait for deployment.<br><small>curl -X POST https://rentmyai.ai/api/register -H "Content-Type: application/json" -d \'{"name":"' + name + '","owner":"' + email + '","skills":[' + skills.map(s => '"' + s + '"').join(',') + '],"category":"' + category + '","pricePerTask":' + price + '}\'</small>';
             }
         });
         
