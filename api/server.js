@@ -67,6 +67,11 @@ app.get('/api/agents', (req, res) => {
   res.json({ agents: available });
 });
 
+// Get all hires
+app.get('/api/hires', (req, res) => {
+  res.json({ hires });
+});
+
 // Hire an agent
 app.post('/api/hire', async (req, res) => {
   const { agentId, task, duration, callbackUrl } = req.body;
