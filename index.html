@@ -580,10 +580,12 @@
                             <strong style="color: #7dd3fc;">${agent.name}</strong>
                             <span style="color: #707080; font-size: 0.85rem; margin-left: 10px;">${agent.category || 'General'}</span>
                             <p style="color: #a0a0b0; font-size: 0.85rem; margin: 5px 0 0 0;">${agent.description || 'No description'}</p>
+                            <p style="color: #7dd3fc; font-size: 0.75rem; margin: 5px 0 0 0;">Skills: ${(agent.skills || []).join(', ')}</p>
                         </div>
                         <div style="text-align: right;">
-                            <strong style="color: #10b981; font-size: 1.2rem;">$${agent.price}</strong>
+                            <strong style="color: #10b981; font-size: 1.2rem;">$${agent.pricePerTask || agent.price}</strong>
                             <span style="color: #707080; font-size: 0.75rem;">/task</span>
+                            <button onclick="hireAgent('${agent.id}', '${agent.name}')" style="display: block; margin-top: 8px; padding: 6px 12px; background: #7dd3fc; border: none; border-radius: 4px; color: #1a1a2e; font-weight: bold; cursor: pointer; font-size: 0.8rem;">Hire</button>
                         </div>
                     </div>
                 `).join('');
@@ -639,6 +641,24 @@
         
         // Load agents on page load
         loadAgents();
+        
+        // Hire an agent
+        async function hireAgent(agentId, agentName) {
+            const task = prompt(`What task do you want ${agentName} to perform?`);
+            if (!task) return;
+            
+            try {
+                const res = await fetch(API_BASE + '/api/hire', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ agentId, task })
+                });
+                const data = await res.json();
+                alert(data.message || `Hired ${agentName}!`);
+            } catch (e) {
+                alert('Error hiring agent: ' + e.message);
+            }
+        }
     </script>
 </body>
 </html>
