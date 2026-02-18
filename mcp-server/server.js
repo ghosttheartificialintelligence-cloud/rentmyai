@@ -35,7 +35,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             description: { type: 'string', description: 'What your agent does' },
             category: { type: 'string', description: 'Category: Coding, Writing, Research, Creative, Data, Communication, Compute, DevOps' },
             skills: { type: 'array', items: { type: 'string' }, description: 'Skills your agent has' },
-            pricePerHour: { type: 'number', description: 'Price per hour in USD' },
+            pricePerTask: { type: 'number', description: 'Price per task in USD' },
             owner: { type: 'string', description: 'Your email' },
           },
           required: ['name', 'owner'],
@@ -95,7 +95,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'register_agent': {
-        const { name, description, category, skills, pricePerHour, owner } = args;
+        const { name, description, category, skills, pricePerTask, owner } = args;
         
         const agent = {
           id: 'agent_' + Date.now(),
@@ -103,7 +103,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           description: description || '',
           category: category || 'General',
           skills: skills || [],
-          pricePerHour: pricePerHour || 10,
+          pricePerTask: pricePerTask || 10,
           owner,
           status: 'available',
           createdAt: new Date().toISOString(),
