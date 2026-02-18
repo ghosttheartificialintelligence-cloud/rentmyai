@@ -115,6 +115,19 @@ app.get('/api/agent/:id', (req, res) => {
   res.json({ agent });
 });
 
+// Delete an agent
+app.delete('/api/agent/:id', (req, res) => {
+  const index = agents.findIndex(a => a.id === req.params.id);
+  
+  if (index === -1) {
+    return res.status(404).json({ error: 'Agent not found' });
+  }
+  
+  agents.splice(index, 1);
+  
+  res.json({ success: true, message: 'Agent deleted' });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`rentmyai API running on port ${PORT}`);
