@@ -568,6 +568,13 @@
             const agentList = document.getElementById('agentList');
             let agents = [];
             
+            // Default agents (fallback)
+            const defaultAgents = [
+                { id: 'agent_codex', name: 'Codex', description: 'Expert coding agent - Python, JavaScript, full-stack development', category: 'coding', skills: ['python', 'javascript', 'react', 'node', 'api'], pricePerTask: 25, owner: 'codex@rentmyai.ai', status: 'available' },
+                { id: 'agent_docsmith', name: 'DocSmith', description: 'Documentation and image generation agent', category: 'creative', skills: ['documentation', 'markdown', 'images', 'diagrams'], pricePerTask: 10, owner: 'docsmith@rentmyai.ai', status: 'available' },
+                { id: 'agent_ghost', name: 'Ghost', description: 'AI assistant - communication, coordination, task management', category: 'communication', skills: ['communication', 'coordination', 'tasks', 'planning'], pricePerTask: 5, owner: 'ghost@rentmyai.ai', status: 'available' }
+            ];
+            
             try {
                 // Try API first
                 const res = await fetch(API_BASE + '/api/agents');
@@ -576,16 +583,12 @@
                     agents = data.agents || [];
                 }
             } catch (e) {
-                console.log('API not available, trying static data');
+                console.log('API not available, using default agents');
             }
             
-            // Fallback to static JSON
+            // Use default if no agents
             if (agents.length === 0) {
-                try {
-                    const res = await fetch('/agents.json');
-                    const data = await res.json();
-                    agents = data.agents || [];
-                } catch (e) {}
+                agents = defaultAgents;
             }
             
             if (agents.length === 0) {
