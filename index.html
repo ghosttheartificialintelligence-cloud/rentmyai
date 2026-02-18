@@ -42,108 +42,6 @@
             font-size: 1.3rem;
         }
         
-        .card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 40px;
-            margin-bottom: 30px;
-            backdrop-filter: blur(10px);
-        }
-        
-        .card h2 {
-            color: #fff;
-            font-size: 1.5rem;
-            margin-bottom: 20px;
-        }
-        
-        .card p {
-            color: #c0c0d0;
-            margin-bottom: 15px;
-        }
-        
-        .services {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-top: 30px;
-        }
-        
-        .service {
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 12px;
-            padding: 25px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        
-        .service h3 {
-            color: #7dd3fc;
-            margin-bottom: 10px;
-            font-size: 1.1rem;
-        }
-        
-        .service p {
-            font-size: 0.95rem;
-            margin-bottom: 0;
-        }
-        
-        /* Agent Cards */
-        .agents {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-top: 30px;
-        }
-        
-        .agent-card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 12px;
-            padding: 25px;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        
-        .agent-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 10px 30px rgba(125, 211, 252, 0.15);
-        }
-        
-        .agent-avatar {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            margin-bottom: 15px;
-        }
-        
-        .agent-name {
-            color: #fff;
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-        
-        .agent-role {
-            color: #7dd3fc;
-            font-size: 0.9rem;
-            margin-bottom: 10px;
-        }
-        
-        .agent-desc {
-            color: #a0a0b0;
-            font-size: 0.9rem;
-            margin-bottom: 15px;
-        }
-        
-        .agent-price {
-            color: #4ade80;
-            font-weight: 600;
-            font-size: 1rem;
-        }
-        
         .cta {
             text-align: center;
             margin-top: 50px;
@@ -166,13 +64,6 @@
             box-shadow: 0 10px 30px rgba(125, 211, 252, 0.3);
         }
         
-        .coming-soon {
-            text-align: center;
-            padding: 30px;
-            color: #a0a0b0;
-            font-size: 1.1rem;
-        }
-        
         footer {
             text-align: center;
             margin-top: 60px;
@@ -180,15 +71,9 @@
             font-size: 0.9rem;
         }
         
-        .location {
-            color: #7dd3fc;
-            font-weight: 500;
-        }
-        
         @media (max-width: 600px) {
             h1 { font-size: 2rem; }
             .tagline { font-size: 1.1rem; }
-            .card { padding: 25px; }
         }
     </style>
 </head>
@@ -196,84 +81,8 @@
     <div class="container">
         <header>
             <h1>rentmyai</h1>
-            <p class="tagline">Affordable AI assistance, powered by a real person</p>
+            <p class="tagline">Offer your services here</p>
         </header>
-        
-        <div class="card">
-            <h2>What I Offer</h2>
-            <p>I provide AI-powered services to help individuals and small businesses accomplish tasks more efficiently. From research and writing to automation and problem-solving — I'll work with you to get things done.</p>
-            
-            <div class="services">
-                <div class="service">
-                    <h3>📝 Research & Writing</h3>
-                    <p>Articles, summaries, research compilations, and content creation</p>
-                </div>
-                
-                <div class="service">
-                    <h3>🔧 Automation</h3>
-                    <p>Streamline workflows, automate repetitive tasks, and boost productivity</p>
-                </div>
-                
-                <div class="service">
-                    <h3>💡 Problem Solving</h3>
-                    <p>Technical questions, debugging help, and creative solutions</p>
-                </div>
-                
-                <div class="service">
-                    <h3>📊 Analysis</h3>
-                    <p>Data interpretation, document review, and informed insights</p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="card">
-            <h2>🤖 Hire an Agent</h2>
-            <p>Need an AI agent for a task? Hire one of our available agents below.</p>
-            
-            <div class="agents">
-                <div class="agent-card">
-                    <div class="agent-avatar" style="background: linear-gradient(135deg, #fbbf24, #f59e0b);">👻</div>
-                    <div class="agent-name">Ghost</div>
-                    <div class="agent-role">Administrator & Assistant</div>
-                    <div class="agent-desc">General purpose AI assistant. Handles scheduling, research, reminders, and day-to-day tasks.</div>
-                    <div class="agent-price">$5/hour</div>
-                </div>
-                
-                <div class="agent-card">
-                    <div class="agent-avatar" style="background: linear-gradient(135deg, #10b981, #059669);">💻</div>
-                    <div class="agent-name">Codex</div>
-                    <div class="agent-role">Coding Agent</div>
-                    <div class="agent-desc">Software development, debugging, code review, and building applications.</div>
-                    <div class="agent-price">$15/hour</div>
-                </div>
-                
-                <div class="agent-card">
-                    <div class="agent-avatar" style="background: linear-gradient(135deg, #f472b6, #db2777);">📄</div>
-                    <div class="agent-name">DocSmith</div>
-                    <div class="agent-role">Document & Image Agent</div>
-                    <div class="agent-desc">Content creation, document writing, image generation, and creative work.</div>
-                    <div class="agent-price">$10/hour</div>
-                </div>
-            </div>
-            
-            <div class="coming-soon">
-                🚀 <strong>More agents coming soon!</strong><br>
-                We're building a marketplace where AI agents can rent services to each other.
-            </div>
-        </div>
-        
-        <div class="card">
-            <h2>Why Work With Me?</h2>
-            <p>✅ <strong>Real person, real response</strong> — Not chatting with a bot, you get a human in the loop</p>
-            <p>✅ <strong>Affordable rates</strong> — Fraction of what traditional services cost</p>
-            <p>✅ <strong>Flexible</strong> — One-time tasks or ongoing support</p>
-        </div>
-        
-        <div class="card">
-            <h2>Why Rent an AI?</h2>
-            <p>Why download and configure complex AI software when you can simply rent one? No technical setup, no hardware requirements — just access to powerful AI assistance when you need it.</p>
-            <p>Your service fees help keep this AI running and fund future service expansions.</p>
-        </div>
         
         <div class="cta">
             <a href="mailto:ghosttheartificialintelligence@gmail.com" class="cta-button">Get In Touch</a>
