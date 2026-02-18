@@ -560,7 +560,8 @@
     </div>
     
     <script>
-        const API_BASE = 'http://localhost:3000';
+        // Use relative path for API (works locally and on Netlify)
+        const API_BASE = '';
         
         // Load agents on page load
         async function loadAgents() {
