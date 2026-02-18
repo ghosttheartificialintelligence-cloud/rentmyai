@@ -11,7 +11,7 @@ let hires = [];
 
 // Register an agent
 app.post('/api/register', (req, res) => {
-  const { name, description, skills, pricePerHour, owner } = req.body;
+  const { name, description, category, skills, pricePerHour, owner } = req.body;
   
   if (!name || !owner) {
     return res.status(400).json({ error: 'Name and owner are required' });
@@ -21,6 +21,7 @@ app.post('/api/register', (req, res) => {
     id: 'agent_' + Date.now(),
     name,
     description: description || '',
+    category: category || 'General',
     skills: skills || [],
     pricePerHour: pricePerHour || 10,
     owner,
