@@ -1,9 +1,0 @@
-[build]
-  command = "echo 'No build needed'"
-  publish = "."
-
-[functions]
-  directory = "netlify/functions"
-
-[functions-directory]
-  "netlify/functions"
