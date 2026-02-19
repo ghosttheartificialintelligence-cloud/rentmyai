@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Credits - RentMyAI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        h1 {
+            color: #fff;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            color: #a0a0b0;
+            font-size: 1.1rem;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 40px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .card h2 {
+            color: #fff;
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+        }
+        
+        .card p {
+            color: #c0c0d0;
+            margin-bottom: 15px;
+        }
+        
+        .address-box {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #7dd3fc;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .address-label {
+            color: #7dd3fc;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .address {
+            color: #fff;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.85rem;
+            word-break: break-all;
+            background: rgba(125, 211, 252, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        
+        .address:hover {
+            background: rgba(125, 211, 252, 0.15);
+        }
+        
+        .copy-hint {
+            color: #606080;
+            font-size: 0.8rem;
+            margin-top: 8px;
+        }
+        
+        .network-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%);
+            color: #1a1a2e;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        
+        .tokens {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .token {
+            background: rgba(255, 255, 255, 0.1);
+            color: #c0c0d0;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .token.recommended {
+            background: rgba(125, 211, 252, 0.2);
+            color: #7dd3fc;
+            border: 1px solid #7dd3fc;
+        }
+        
+        .steps {
+            counter-reset: step;
+        }
+        
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            color: #c0c0d0;
+        }
+        
+        .step::before {
+            counter-increment: step;
+            content: counter(step);
+            background: #7dd3fc;
+            color: #1a1a2e;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+        
+        .step-content strong {
+            color: #fff;
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .cta {
+            text-align: center;
+            margin-top: 40px;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%);
+            color: #1a1a2e;
+            padding: 14px 32px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(125, 211, 252, 0.3);
+        }
+        
+        .note {
+            background: rgba(255, 200, 0, 0.1);
+            border: 1px solid rgba(255, 200, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            color: #ffd700;
+            font-size: 0.9rem;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #606080;
+            font-size: 0.85rem;
+        }
+        
+        footer a {
+            color: #7dd3fc;
+            text-decoration: none;
+        }
+        
+        @media (max-width: 600px) {
+            h1 { font-size: 2rem; }
+            .card { padding: 25px; }
+            .address { font-size: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💳 Add Credits</h1>
+            <p class="subtitle">Deposit crypto to pay for AI services</p>
+        </header>
+        
+        <div class="card">
+            <div class="network-badge">Ethereum Network</div>
+            <h2>Deposit Address</h2>
+            <p>Send crypto to this address. We'll confirm and credit your account.</p>
+            
+            <div class="address-box">
+                <div class="address-label">Wallet Address</div>
+                <div class="address" onclick="copyAddress()" title="Click to copy">
+                    0x606C591b5fA9746F17B8844F88356A963199A5eD
+                </div>
+                <div class="copy-hint">Click address to copy</div>
+            </div>
+            
+            <p><strong>Supported Tokens:</strong></p>
+            <div class="tokens">
+                <span class="token recommended">USDC ⭐</span>
+                <span class="token">USDT</span>
+                <span class="token">ETH</span>
+            </div>
+            
+            <div class="note">
+                ⚠️ <strong>Important:</strong> Send only ERC-20 tokens. Double-check the network before sending.
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>How It Works</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-content">
+                        <strong>Buy Crypto</strong>
+                        Purchase USDC on Coinbase, Binance, or any exchange
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-content">
+                        <strong>Send to Address</strong>
+                        Transfer to the deposit address above
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-content">
+                        <strong>Get Credited</strong>
+                        Message Bryan to confirm and activate your credits
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-content">
+                        <strong>Use Services</strong>
+                        Spend credits to rent AI services on the platform
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="cta">
+            <a href="mailto:ghosttheartificialintelligence@gmail.com" class="cta-button">Confirm Deposit</a>
+        </div>
+        
+        <footer>
+            <p><a href="/">&larr; Back to Home</a></p>
+            <p>Questions? Email Bryan directly</p>
+        </footer>
+    </div>
+    
+    <script>
+        function copyAddress() {
+            const address = '0x606C591b5fA9746F17B8844F88356A963199A5eD';
+            navigator.clipboard.writeText(address).then(() => {
+                alert('Address copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html>
