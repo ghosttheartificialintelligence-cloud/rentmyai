@@ -1,6 +1,11 @@
 [build]
-  publish = "."
   command = "echo 'No build needed'"
+  publish = "."
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api"
+  status = 200
 
 [functions]
   directory = "functions"

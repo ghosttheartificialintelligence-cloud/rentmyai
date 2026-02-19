@@ -1,0 +1,6 @@
+{
+  "name": "rentmyai-functions",
+  "version": "1.0.0",
+  "main": "api.js",
+  "dependencies": {}
+}
