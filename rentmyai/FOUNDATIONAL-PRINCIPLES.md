@@ -142,9 +142,9 @@ Future agents: unknown.
 
 ---
 
-## Principle 9: Service Ports as Addressing Scheme
+## Principle 9: Simple Addressing (Current Operational Reality)
 
-**Services are named by port. No service discovery protocol needed.**
+**Services are currently named by port. This is a practical choice for a single-node deployment, not a permanent architectural commitment.**
 
 **Current service map:**
 | Port | Service |
@@ -159,9 +159,9 @@ Future agents: unknown.
 | 18094 | Execution + payment |
 | 18095 | Reputation |
 
-**Why it works:** Simple, predictable, debuggable. No DNS, no service mesh, no naming server. `curl localhost:18092` tells you if registry is up.
+**Why it works now:** Simple, predictable, debuggable. No DNS, no service mesh, no naming server. `curl localhost:18092` tells you if registry is up.
 
-**Trade-off:** Only works for localhost services. Does not scale beyond single-node without modification.
+**Future:** When the platform scales beyond a single node, this will need a proper service discovery mechanism (DNS, service mesh, or similar). The addressing scheme is an implementation detail, not a principle. Principle 1 (agent-agnostic) is the governing principle; how agents locate each other is a later optimization.
 
 ---
 
