@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Agent Execution Service
- * RentMyAI.ai — Level 3 Phase 3.5 + ME-0004 Phase A + ME-0010 Steps 1-2
+ * RentMyAI.ai — Level 3 Phase 3.5 + ME-0004 Phase A + ME-0010 Steps 1-3
  *
  * State flow:
  *   job_created → escrow_funded → in_progress → submitted → paid
@@ -20,7 +20,16 @@
  *   - POST /jobs/:id/subcontract — contractor creates one child job (depth=1, one child per parent)
  *   - GET  /jobs/:id/children    — list child jobs for a parent
  *   - Fields: parent_job_id, child_job_id, role, subcontract_depth, child_description
- *   - Settlement logic NOT implemented yet (Step 3)
+ *
+ * ME-0010 Step 2: Accept/Reject Decision
+ *   - GET /decide/accept-child — subcontractor decides accept or reject (no counter)
+ *   - Decision reasons: all_filters_passed, not_subcontractor, child_job_closed,
+ *     rate_below_threshold, capacity_reached, depth_limit_exceeded, missing_child_description
+ *
+ * ME-0010 Step 3: Settlement Chain Enforcement
+ *   - Parent approval blocked until child is paid
+ *   - Evidence includes: child_job_id, child_tx_hash, contractor_margin on parent job
+ *   - Evidence includes: parent_job_id on child job
  */
 
 const http = require('http');
@@ -268,6 +277,9 @@ async function generateEvidenceRecord(job) {
   const atomicAmount = Math.round(parseFloat(job.agreed_rate) * 1e12);
   const txFeeAtomic = parseInt(job.monero_tx_fee) || 0;
 
+  // Load store for cross-referencing parent/child jobs (ME-0010 Step 3)
+  const store = loadJobs();
+
   // Build the evidence record
   // ME-0006: Load upstream artifact if this job has a chained dependency
   let upstreamArtifact = null;
@@ -352,6 +364,34 @@ async function generateEvidenceRecord(job) {
       block_confirmed: true
     },
 
+    // ME-0010 Step 3: Subcontracting evidence linkage
+    subcontracting: (() => {
+      if (job.parent_job_id) {
+        // This is a child job — link to parent
+        const parentJob = store.jobs[job.parent_job_id];
+        return {
+          role: 'subcontractor',
+          parent_job_id: job.parent_job_id,
+          parent_rate_xmr: parentJob ? parentJob.agreed_rate : null,
+          parent_tx_hash: parentJob ? parentJob.monero_tx_hash : null
+        };
+      } else if (job.child_job_id) {
+        // This is a parent job — link to child
+        const childJob = store.jobs[job.child_job_id];
+        const parentRate = parseFloat(job.agreed_rate) || 0;
+        const childRate = childJob ? (parseFloat(childJob.agreed_rate) || 0) : 0;
+        return {
+          role: 'contractor',
+          child_job_id: job.child_job_id,
+          child_rate_xmr: childJob ? childJob.agreed_rate : null,
+          child_tx_hash: childJob ? childJob.monero_tx_hash : null,
+          contractor_margin_xmr: (parentRate - childRate).toFixed(6),
+          contractor_margin_derivation: `${parentRate} (parent) - ${childRate} (child) = ${(parentRate - childRate).toFixed(6)} XMR`
+        };
+      }
+      return null;
+    })(),
+
     verification_status: {
       payment_verified: !!job.monero_tx_hash,
       evidence_verified: true,
@@ -429,7 +469,7 @@ const server = http.createServer(async (req, res) => {
   // GET /health
   if (url.pathname === '/health' && req.method === 'GET') {
     res.writeHead(200);
-    res.end(JSON.stringify({ status: 'ok', service: 'execution', version: '1.8.0', milestone: 'ME-0010-Step2' }));
+    res.end(JSON.stringify({ status: 'ok', service: 'execution', version: '1.9.0', milestone: 'ME-0010-Step3' }));
     return;
   }
 
@@ -1099,6 +1139,23 @@ const server = http.createServer(async (req, res) => {
             if (!job.escrow_funded)
               throw Object.assign(new Error('Escrow must be funded before approval'), { code: 409 });
 
+            // ── ME-0010 Step 3: Settlement chain enforcement ────────────────
+            // If this is a parent job with a child job, the child must be settled first.
+            if (job.child_job_id) {
+              const childJob = store.jobs[job.child_job_id];
+              if (!childJob) throw Object.assign(new Error(`Child job '${job.child_job_id}' not found`), { code: 409 });
+              if (!['paid', 'payment_failed'].includes(childJob.status))
+                throw Object.assign(new Error(
+                  `Settlement chain: child job '${job.child_job_id}' must be settled before parent. ` +
+                  `Child status: ${childJob.status}`
+                ), { code: 409 });
+              if (childJob.status === 'payment_failed')
+                throw Object.assign(new Error(
+                  `Settlement chain: child job '${job.child_job_id}' payment failed. ` +
+                  `Cannot pay parent until child payment succeeds.`
+                ), { code: 409 });
+            }
+
             if (job.monero_tx_hash) {
               throw Object.assign(new Error(`Payment already made. tx_hash: ${job.monero_tx_hash}`), { code: 409 });
             }
@@ -1425,8 +1482,8 @@ async function main() {
   fs.mkdirSync(EVIDENCE_DIR, { mode: 0o700, recursive: true });
 
   console.log('═══════════════════════════════════════════════════════════');
-  console.log('   Agent Execution Service v1.8');
-  console.log('   RentMyAI.ai — ME-0010 Step 2 (Accept/Reject Decision)');
+  console.log('   Agent Execution Service v1.9');
+  console.log('   RentMyAI.ai — ME-0010 Step 3 (Settlement Chain)');
   console.log('═══════════════════════════════════════════════════════════');
   console.log(`Data:     ${JOBS_FILE}`);
   console.log(`Evidence: ${EVIDENCE_DIR}`);
@@ -1451,7 +1508,7 @@ async function main() {
   console.log('═══════════════════════════════════════════════════════════');
 
   server.listen(PORT, '127.0.0.1', () => {
-    console.log(`[init] Execution service v1.8 listening on port ${PORT}`);
+    console.log(`[init] Execution service v1.9 listening on port ${PORT}`);
   });
 }
 
