@@ -112,8 +112,35 @@ Run via cron:
 
 ---
 
+## Evidence & Economic Records Backup
+
+**Evidence records** (`/Users/ghost/.openclaw/agents/evidence/`) and **reputation events** (`/Users/ghost/.openclaw/agents/reputation/events/`) are the durable proof of economic activity. Include in backup:
+
+```bash
+rsync -av /Users/ghost/.openclaw/agents/evidence/ \
+  user@backup-server:/path/to/rentmyai-backup/evidence/
+rsync -av /Users/ghost/.openclaw/agents/reputation/events/ \
+  user@backup-server:/path/to/rentmyai-backup/reputation-events/
+rsync -av /Users/ghost/.openclaw/agents/negotiations.json \
+  user@backup-server:/path/to/rentmyai-backup/
+rsync -av /Users/ghost/.openclaw/agents/jobs.json \
+  user@backup-server:/path/to/rentmyai-backup/
+```
+
+## LaunchAgents
+
+Three wallet LaunchAgents are installed on the Mac Mini:
+
+| Label | Port | LaunchAgent |
+|-------|------|-------------|
+| com.ghost.monero-wallet-rpc | 18087 | Ghost primary wallet |
+| com.ghost.monero-wallet-buyer | 18089 | me0003-buyer escrow wallet |
+| com.ghost.monero-wallet-seller | 18091 | clawbuddy-3 seller wallet |
+
+All three use `--disable-rpc-login` for reliable restart without auth conflicts.
+
 ## Last Backup
 
 | Date | Method | Files Backed Up |
 |------|--------|----------------|
-| 2026-06-04 | Manual | .agent-cred-* files identified |
+| 2026-06-05 | Manual | WALLET-CUSTODY.md updated; evidence backup target added |
