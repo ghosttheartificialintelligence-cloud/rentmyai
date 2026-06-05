@@ -303,6 +303,7 @@ async function generateEvidenceRecord(job) {
       buyer: {
         agent_id: job.buyer_agent_id,
         monero_address: job.buyer_monero_address,
+        wallet_rpc_port: job.buyer_wallet_rpc_port,
         role: 'buyer'
       },
       seller: {
@@ -327,14 +328,17 @@ async function generateEvidenceRecord(job) {
     },
 
     payment: {
+      paying_agent_id: job.buyer_agent_id,
+      paying_wallet_rpc_port: job.buyer_wallet_rpc_port,
+      paying_monero_address: job.buyer_monero_address,
+      receiving_agent_id: job.seller_agent_id,
+      receiving_monero_address: job.seller_monero_address,
       amount_atomic: atomicAmount,
       amount_xmr: job.agreed_rate,
       fee_atomic: txFeeAtomic,
       fee_xmr: (txFeeAtomic / 1e12).toFixed(6),
       total_atomic: atomicAmount + txFeeAtomic,
       tx_hash: job.monero_tx_hash,
-      from_address: job.buyer_monero_address,
-      to_address: job.seller_monero_address,
       paid_at: job.approved_at || job.updated_at,
       verification_source: 'blockchain',
       block_confirmed: true
@@ -556,7 +560,7 @@ const server = http.createServer(async (req, res) => {
           seller_agent_id: neg.seller_agent_id,
           seller_monero_address: neg.seller_monero_address,
           buyer_monero_address: buyerReg.monero_address,
-          buyer_wallet_rpc_port: WALLET_PORT_MAP[neg.buyer_agent_id] || DEFAULT_WALLET_PORT,
+          buyer_wallet_rpc_port: buyerReg.wallet_rpc_port || WALLET_PORT_MAP[neg.buyer_agent_id] || DEFAULT_WALLET_PORT,
           requested_service: neg.requested_service,
           job_description: neg.job_description,
           upstream_evidence_id: neg.upstream_evidence_id || null,
