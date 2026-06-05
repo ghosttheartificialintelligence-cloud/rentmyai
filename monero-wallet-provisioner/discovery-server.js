@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Agent Discovery Service
- * RentMyAI.ai — ME-0007
+ * RentMyAI.ai — ME-0007 + ME-0010 Step 4
  *
  * Provides opportunity discovery and heartbeat registry.
  * Enables agents to find each other without explicit human direction.
@@ -11,12 +11,17 @@
  *   Opportunities = agents advertising what they want/need
  *   Discovery = matching opportunities to agents
  *
+ * ME-0010 Step 4: Subcontract Discovery
+ *   - POST /opportunities supports type=subcontract with parent_job_id
+ *   - GET  /opportunities supports ?type=subcontract filter
+ *   - Normal and subcontract opportunities remain distinguishable
+ *
  * API:
  *   POST /heartbeat              — agent heartbeat (register presence + capabilities)
  *   GET  /heartbeat/:agent_id   — get latest heartbeat for one agent
  *   GET  /heartbeats/active      — list all agents with recent heartbeats
- *   POST /opportunities         — post a new opportunity
- *   GET  /opportunities         — list open opportunities (filterable)
+ *   POST /opportunities         — post a new opportunity (normal or subcontract)
+ *   GET  /opportunities         — list open opportunities (filterable by type, service, etc.)
  *   GET  /opportunities/:id     — get one opportunity
  *   DELETE /opportunities/:id   — cancel own opportunity
  *   GET  /health
@@ -173,7 +178,10 @@ function createOpportunity(payload) {
     ttl_seconds: payload.ttl_seconds || 3600,
     status: 'open',
     created_at: now(),
-    expires_at: new Date(Date.now() + (payload.ttl_seconds || 3600) * 1000).toISOString()
+    expires_at: new Date(Date.now() + (payload.ttl_seconds || 3600) * 1000).toISOString(),
+    // ME-0010 Step 4: Subcontract opportunity tagging
+    type: payload.type || 'standard',  // 'standard' or 'subcontract'
+    parent_job_id: payload.parent_job_id || null
   };
 
   store.opportunities[oppId] = opp;
@@ -225,7 +233,7 @@ async function handleRequest(req, res) {
   // Health
   if (pathname === '/health' && method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', service: 'discovery', port: PORT }));
+    res.end(JSON.stringify({ status: 'ok', service: 'discovery', version: '1.1.0', milestone: 'ME-0010-Step4', port: PORT }));
     return;
   }
 
@@ -325,6 +333,7 @@ async function handleRequest(req, res) {
     const direction = url.searchParams.get('direction');
     const rateMax = url.searchParams.get('rate_max');
     const owner = url.searchParams.get('owner');
+    const oppType = url.searchParams.get('type'); // 'standard' or 'subcontract'
 
     let opps = Object.values(store.opportunities).filter(o => o.status === 'open');
 
@@ -339,6 +348,9 @@ async function handleRequest(req, res) {
     }
     if (owner) {
       opps = opps.filter(o => o.owner_agent_id === owner);
+    }
+    if (oppType) {
+      opps = opps.filter(o => (o.type || 'standard') === oppType);
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
