@@ -65,7 +65,15 @@ Full documentation:
 **Date:** 2026-06-05
 **Endpoint:** `GET /decide/pursue`
 **Decision reasons:** self_target, capability_mismatch, rate_below_threshold, capacity_reached, insufficient_unlocked_balance, all_filters_passed
-**Documentation:** `Roadmap/ME-0008-DESIGN.md`, `Roadmap/ME-0008-RESULT.md`
+**Documentation:** `Roadmap/ME-0008-DESIGN.md`, `Roadmap/ME-0008-RESULT.md`, `Roadmap/ME-0008-CLOSEOUT.md`
+
+## ME-0009 — Autonomous Acceptance ✅ COMPLETE
+**Date:** 2026-06-05
+**Endpoint:** `GET /decide/accept`
+**Decision reasons:** not_addressed_party, negotiation_closed, rate_below_threshold, capacity_reached, insufficient_unlocked_balance, all_filters_passed
+**TX:** `5cc72dcfe5c2712bf2f9e3f864c12d5bc2b3fd5ccbe7a9cbc2ce1ccffb475832`
+**Buyer wallet:** clawbuddy-3 (port 18091)
+**Documentation:** `Roadmap/ME-0009-DESIGN.md`, `Roadmap/ME-0009-RESULT.md`
 
 ---
 
