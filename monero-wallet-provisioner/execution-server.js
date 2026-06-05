@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Agent Execution Service
- * RentMyAI.ai — Level 3 Phase 3.5 + ME-0004 Phase A + ME-0010 Step 1
+ * RentMyAI.ai — Level 3 Phase 3.5 + ME-0004 Phase A + ME-0010 Steps 1-2
  *
  * State flow:
  *   job_created → escrow_funded → in_progress → submitted → paid
@@ -429,7 +429,7 @@ const server = http.createServer(async (req, res) => {
   // GET /health
   if (url.pathname === '/health' && req.method === 'GET') {
     res.writeHead(200);
-    res.end(JSON.stringify({ status: 'ok', service: 'execution', version: '1.7.0', milestone: 'ME-0010-Step1' }));
+    res.end(JSON.stringify({ status: 'ok', service: 'execution', version: '1.8.0', milestone: 'ME-0010-Step2' }));
     return;
   }
 
@@ -780,6 +780,123 @@ const server = http.createServer(async (req, res) => {
         console.error('[decide/accept] Error:', err.message);
         res.writeHead(500);
         res.end(JSON.stringify({ error: err.message, decision: 'skip', decision_reason: 'internal_error' }));
+      }
+    })();
+    return;
+  }
+
+  // ── GET /decide/accept-child ──────────────────────────────────────────────
+  // ME-0010 Step 2: Should the subcontractor accept this child job?
+  // Accept or reject only — no counter-proposals.
+  // Filters: not_subcontractor, child_job_closed, rate_below_threshold,
+  //          capacity_reached, depth_limit_exceeded, missing_child_description
+  if (url.pathname === '/decide/accept-child' && req.method === 'GET') {
+    const { agent_id, child_job_id } = (() => {
+      const u = new URL(req.url, 'http://127.0.0.1');
+      return { agent_id: u.searchParams.get('agent_id'), child_job_id: u.searchParams.get('child_job_id') };
+    })();
+
+    if (!agent_id || !child_job_id) {
+      res.writeHead(400);
+      res.end(JSON.stringify({ error: 'agent_id and child_job_id are required' }));
+      return;
+    }
+
+    (async () => {
+      try {
+        const store = loadJobs();
+        const childJob = store.jobs[child_job_id];
+
+        // 1. Child job must exist
+        if (!childJob) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ agent_id, child_job_id, decision: 'reject', decision_reason: 'child_job_not_found', auto_accept_child: false }));
+          return;
+        }
+
+        // 2. Agent must be the seller (subcontractor) on the child job
+        if (childJob.seller_agent_id !== agent_id) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, child_job_id, decision: 'reject', decision_reason: 'not_subcontractor', auto_accept_child: false }));
+          return;
+        }
+
+        // 3. Child job must not be closed
+        if (childJob.status !== 'job_created') {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, child_job_id, decision: 'reject', decision_reason: 'child_job_closed', auto_accept_child: false }));
+          return;
+        }
+
+        // 4. child_description must be present
+        if (!childJob.child_description || typeof childJob.child_description !== 'string') {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, child_job_id, decision: 'reject', decision_reason: 'missing_child_description', auto_accept_child: false }));
+          return;
+        }
+
+        // 5. Fetch agent's registry record for default_rate
+        const reg = await httpGet(`${REGISTRY_URL}/registry/${encodeURIComponent(agent_id)}`);
+        if (!reg || reg.error) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ agent_id, child_job_id, decision: 'reject', decision_reason: 'agent_not_registered', auto_accept_child: false }));
+          return;
+        }
+
+        // 6. Rate threshold check
+        const myMinRate = parseFloat(reg.default_rate) || 0;
+        const childRate = parseFloat(childJob.agreed_rate) || 0;
+        if (childRate < myMinRate) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, child_job_id, decision: 'reject', decision_reason: 'rate_below_threshold', auto_accept_child: false }));
+          return;
+        }
+
+        // 7. Capacity check — count active jobs for this agent
+        const activeJobs = Object.values(store.jobs).filter(j => {
+          const isParty = j.buyer_agent_id === agent_id || j.seller_agent_id === agent_id;
+          const isActive = ['job_created', 'escrow_funded', 'in_progress'].includes(j.status);
+          return isParty && isActive;
+        });
+        const MAX_ACTIVE = 3;
+        if (activeJobs.length >= MAX_ACTIVE) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, child_job_id, decision: 'reject', decision_reason: 'capacity_reached', auto_accept_child: false }));
+          return;
+        }
+
+        // 8. Depth limit check — this agent must not already be acting as subcontractor on another job
+        // Exclude the child_job_id being evaluated (they don't have it yet — this is the decision point)
+        const isAlreadySubcontractor = Object.values(store.jobs).some(j =>
+          j.seller_agent_id === agent_id &&
+          j.subcontract_depth === 1 &&
+          j.job_id !== child_job_id &&
+          !['paid', 'payment_failed'].includes(j.status)
+        );
+        if (isAlreadySubcontractor) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, child_job_id, decision: 'reject', decision_reason: 'depth_limit_exceeded', auto_accept_child: false }));
+          return;
+        }
+
+        // All filters passed — accept
+        res.writeHead(200);
+        res.end(JSON.stringify({
+          agent_id,
+          child_job_id,
+          decision: 'accept',
+          decision_reason: 'all_filters_passed',
+          auto_accept_child: true,
+          accept_params: {
+            child_job_id,
+            accepting_agent_id: agent_id
+          }
+        }));
+
+      } catch (err) {
+        console.error('[decide/accept-child] Error:', err.message);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: err.message, decision: 'reject', decision_reason: 'internal_error', auto_accept_child: false }));
       }
     })();
     return;
@@ -1308,8 +1425,8 @@ async function main() {
   fs.mkdirSync(EVIDENCE_DIR, { mode: 0o700, recursive: true });
 
   console.log('═══════════════════════════════════════════════════════════');
-  console.log('   Agent Execution Service v1.7');
-  console.log('   RentMyAI.ai — ME-0010 Step 1 (Subcontracting)');
+  console.log('   Agent Execution Service v1.8');
+  console.log('   RentMyAI.ai — ME-0010 Step 2 (Accept/Reject Decision)');
   console.log('═══════════════════════════════════════════════════════════');
   console.log(`Data:     ${JOBS_FILE}`);
   console.log(`Evidence: ${EVIDENCE_DIR}`);
@@ -1334,7 +1451,7 @@ async function main() {
   console.log('═══════════════════════════════════════════════════════════');
 
   server.listen(PORT, '127.0.0.1', () => {
-    console.log(`[init] Execution service v1.7 listening on port ${PORT}`);
+    console.log(`[init] Execution service v1.8 listening on port ${PORT}`);
   });
 }
 
