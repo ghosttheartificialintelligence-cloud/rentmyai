@@ -652,6 +652,114 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── GET /decide/accept ────────────────────────────────────────────────────
+  // Decision engine: given an agent_id and negotiation_id, should the agent accept?
+  // Applies hard filters: negotiation state, addressed party, rate, capacity, budget
+  if (url.pathname === '/decide/accept' && req.method === 'GET') {
+    const { agent_id, negotiation_id } = (() => {
+      const u = new URL(req.url, 'http://127.0.0.1');
+      return { agent_id: u.searchParams.get('agent_id'), negotiation_id: u.searchParams.get('negotiation_id') };
+    })();
+
+    if (!agent_id || !negotiation_id) {
+      res.writeHead(400);
+      res.end(JSON.stringify({ error: 'agent_id and negotiation_id are required' }));
+      return;
+    }
+
+    (async () => {
+      try {
+        // 1. Fetch negotiation from negotiation service
+        const neg = await httpGet(`${NEGOTIATE_URL}/negotiate/${encodeURIComponent(negotiation_id)}`);
+        if (!neg || neg.error) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ error: 'Negotiation not found', decision: 'skip', decision_reason: 'negotiation_not_found' }));
+          return;
+        }
+
+        // 2. Check negotiation is still open
+        if (neg.status !== 'proposed') {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, negotiation_id, decision: 'skip', decision_reason: 'negotiation_closed', auto_accept: false }));
+          return;
+        }
+
+        // 3. Verify agent is the addressed party (buyer)
+        if (neg.buyer_agent_id !== agent_id) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, negotiation_id, decision: 'skip', decision_reason: 'not_addressed_party', auto_accept: false }));
+          return;
+        }
+
+        // 4. Fetch agent's registry record for default_rate
+        const reg = await httpGet(`${REGISTRY_URL}/registry/${encodeURIComponent(agent_id)}`);
+        if (!reg || reg.error) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ error: 'Agent not in registry', decision: 'skip', decision_reason: 'agent_not_registered' }));
+          return;
+        }
+
+        const myMinRate = parseFloat(reg.default_rate) || 0;
+        // Use final_rate if set (accepted), otherwise proposed_rate (proposed)
+        const effectiveRate = neg.final_rate != null ? parseFloat(neg.final_rate) : parseFloat(neg.proposed_rate) || 0;
+
+        // 5. Rate threshold check
+        if (effectiveRate < myMinRate) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, negotiation_id, decision: 'skip', decision_reason: 'rate_below_threshold', auto_accept: false }));
+          return;
+        }
+
+        // 6. Capacity check
+        const store = loadJobs();
+        const activeJobs = Object.values(store.jobs).filter(j => {
+          const isParty = j.buyer_agent_id === agent_id || j.seller_agent_id === agent_id;
+          const isActive = ['job_created', 'escrow_funded', 'in_progress'].includes(j.status);
+          return isParty && isActive;
+        });
+        const MAX_ACTIVE = 3;
+        if (activeJobs.length >= MAX_ACTIVE) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, negotiation_id, decision: 'skip', decision_reason: 'capacity_reached', auto_accept: false }));
+          return;
+        }
+
+        // 7. Budget check — buyer must have enough unlocked balance for escrow
+        const buyerPort = reg.wallet_rpc_port || WALLET_PORT_MAP[agent_id] || DEFAULT_WALLET_PORT;
+        const balanceResult = await walletRpcCall('get_balance', {}, 10000, agent_id);
+        if (balanceResult && balanceResult.unlocked_balance !== undefined) {
+          const unlocked = parseInt(balanceResult.unlocked_balance) / 1e12;
+          if (unlocked < effectiveRate) {
+            res.writeHead(200);
+            res.end(JSON.stringify({ agent_id, negotiation_id, decision: 'skip', decision_reason: 'insufficient_unlocked_balance', auto_accept: false }));
+            return;
+          }
+        }
+
+        // All filters passed — accept
+        res.writeHead(200);
+        res.end(JSON.stringify({
+          agent_id,
+          negotiation_id,
+          decision: 'accept',
+          decision_reason: 'all_filters_passed',
+          effective_rate: effectiveRate,
+          auto_accept: true,
+          accept_params: {
+            job_id: negotiation_id,
+            accepting_agent_id: agent_id
+          }
+        }));
+
+      } catch (err) {
+        console.error('[decide/accept] Error:', err.message);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: err.message, decision: 'skip', decision_reason: 'internal_error' }));
+      }
+    })();
+    return;
+  }
+
   // ── POST /jobs/create ──────────────────────────────────────────────────────
   if (url.pathname === '/jobs/create' && req.method === 'POST') {
     let body = '';
@@ -1077,6 +1185,7 @@ async function main() {
   console.log('  GET  /evidence/:job_id    — get evidence record JSON');
   console.log('  GET  /evidence/:job_id/summary — human-readable summary');
   console.log('  GET  /decide/pursue       — decision engine: should agent pursue?');
+  console.log('  GET  /decide/accept       — decision engine: should agent accept?');
   console.log('═══════════════════════════════════════════════════════════');
 
   server.listen(PORT, '127.0.0.1', () => {

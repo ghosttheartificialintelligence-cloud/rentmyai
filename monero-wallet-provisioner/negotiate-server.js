@@ -315,12 +315,20 @@ const server = http.createServer(async (req, res) => {
 
         // Determine who can accept based on status
         let canAccept = false;
-        if (n.status === 'proposed' && accepting_agent_id === n.seller_agent_id) {
+        if (n.status === 'proposed' && accepting_agent_id === n.buyer_agent_id) {
+          // Buyer accepts seller's proposed rate (seller posted 'available')
+          n.final_rate = n.proposed_rate;
+          canAccept = true;
+        } else if (n.status === 'proposed' && accepting_agent_id === n.seller_agent_id) {
           // Seller accepts buyer's proposed rate
           n.final_rate = n.proposed_rate;
           canAccept = true;
         } else if (n.status === 'countered' && accepting_agent_id === n.buyer_agent_id) {
           // Buyer accepts seller's counter rate
+          n.final_rate = n.counter_rate;
+          canAccept = true;
+        } else if (n.status === 'countered' && accepting_agent_id === n.seller_agent_id) {
+          // Seller accepts buyer's counter rate
           n.final_rate = n.counter_rate;
           canAccept = true;
         }
