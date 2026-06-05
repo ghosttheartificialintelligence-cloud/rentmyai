@@ -156,7 +156,7 @@ function walletRpcCall(method, params = {}, timeoutMs = 60000) {
 }
 
 function parseJobIdFromPath(pathname) {
-  const m = pathname.match(/^\/jobs\/(.+?)\/(?:fund|start|submit|approve|dispute)$/);
+  const m = pathname.match(/^\/jobs\/(.+?)\/(?:fund|start|submit|approve|dispute|retry-payment)$/);
   return m ? m[1] : null;
 }
 
@@ -616,6 +616,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.endsWith('/submit')) return 'submit';
     if (url.pathname.endsWith('/approve')) return 'approve';
     if (url.pathname.endsWith('/dispute')) return 'dispute';
+    if (url.pathname.endsWith('/retry-payment')) return 'retry-payment';
     return null;
   })();
 
@@ -801,6 +802,79 @@ const server = http.createServer(async (req, res) => {
               }
             }
             break;
+          }
+
+          case 'retry-payment': {
+            // ME-OPS-001: Allow retry of failed payments without requiring re-approval
+            if (job.status !== 'payment_failed')
+              throw Object.assign(new Error(`Cannot retry payment in status: ${job.status}. Job must be payment_failed.`), { code: 409 });
+            if (!job.payment_failure_reason)
+              throw Object.assign(new Error('No payment failure reason found'), { code: 409 });
+
+            job.audit_log.push(auditEntry('payment_retry_attempted', 'system',
+              `Retrying payment after failure: ${job.payment_failure_reason}`));
+
+            const atomicAmount = Math.round(parseFloat(job.agreed_rate) * 1e12);
+            if (atomicAmount <= 0) throw new Error('Invalid agreed_rate');
+
+            let txHash = null;
+            let txFee = null;
+            let paymentFailed = false;
+            let failureReason = null;
+
+            try {
+              const result = await walletRpcCall('transfer', {
+                destinations: [{ amount: atomicAmount, address: job.seller_monero_address }],
+                get_tx_key: true
+              });
+              txHash = result.tx_hash;
+              txFee = result.fee;
+              console.log(`[payment-retry] SUCCESS: ${txHash} | fee: ${txFee} atomic | job: ${jid}`);
+            } catch (transferErr) {
+              paymentFailed = true;
+              failureReason = transferErr.message;
+              console.error(`[payment-retry] FAILED: ${transferErr.message} | job: ${jid}`);
+            }
+
+            if (paymentFailed) {
+              job.payment_failure_reason = failureReason;
+              job.payment_failed_at = now();
+              job.audit_log.push(auditEntry('payment_failed', 'system', failureReason));
+              saveJobs(store);
+              res.writeHead(409, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ status: 'payment_failed', error: failureReason }));
+              return;
+            }
+
+            // Payment succeeded — fall through to the success path
+            job.status = 'paid';
+            job.paid_at = now();
+            job.monero_tx_hash = txHash;
+            job.monero_tx_fee_atomic = txFee;
+            job.payment_failure_reason = null;
+
+            job.audit_log.push(auditEntry('paid', 'system',
+              `TX: ${txHash} | fee: ${txFee} atomic | rate: ${job.agreed_rate} ${job.rate_unit}`));
+
+            const amountStr = atomicAmount.toString();
+            emitReputationEvent({ agent_id: job.buyer_agent_id, event_type: 'job_completed', job_id: jid, role: 'buyer', amount_atomic: amountStr, tx_hash: txHash, verification_source: 'execution_service' });
+            emitReputationEvent({ agent_id: job.seller_agent_id, event_type: 'job_completed', job_id: jid, role: 'seller', amount_atomic: amountStr, tx_hash: txHash, verification_source: 'execution_service' });
+            emitReputationEvent({ agent_id: job.buyer_agent_id, event_type: 'payment_sent', job_id: jid, amount_atomic: amountStr, tx_hash: txHash, verification_source: 'blockchain' });
+            emitReputationEvent({ agent_id: job.seller_agent_id, event_type: 'payment_received', job_id: jid, amount_atomic: amountStr, tx_hash: txHash, verification_source: 'blockchain' });
+
+            // Generate evidence record on successful payment retry
+            try {
+              const evidence = await generateEvidenceRecord(job);
+              job.audit_log.push(auditEntry('evidence_record_generated', 'system', `jer_id: ${evidence.jer_id}`));
+              console.log(`[evidence] Evidence record generated for job ${jid}: ${evidence.jer_id}`);
+            } catch (evidenceErr) {
+              console.error(`[evidence] Failed to generate evidence record: ${evidenceErr.message}`);
+            }
+
+            saveJobs(store);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ status: 'paid', monero_tx_hash: txHash, monero_tx_fee_atomic: txFee }));
+            return;
           }
 
           case 'dispute': {
