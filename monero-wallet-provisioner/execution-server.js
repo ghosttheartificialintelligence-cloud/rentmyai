@@ -33,7 +33,14 @@ const ARTIFACTS_DIR = path.join(EVIDENCE_DIR, 'artifacts');
 const NEGOTIATE_URL = 'http://127.0.0.1:18093';
 const REGISTRY_URL = 'http://127.0.0.1:18092';
 const WALLET_RPC_HOST = '127.0.0.1';
-const WALLET_RPC_PORT = 18089;
+const WALLET_RPC_USER = 'ghost';
+const WALLET_RPC_PASS = 'ghost';
+const DEFAULT_WALLET_PORT = 18089;
+// Per-agent wallet RPC port map — each buyer agent must have a registered wallet on a unique port
+const WALLET_PORT_MAP = {
+  'me0003-buyer': 18089,
+  'clawbuddy-3':  18091,
+};
 const REPUTATION_URL = 'http://127.0.0.1:18095';
 
 // ─── STORE ───────────────────────────────────────────────────────────────────
@@ -86,9 +93,6 @@ function httpGet(url, timeoutMs = 5000) {
   });
 }
 
-const WALLET_RPC_USER = 'ghost';
-const WALLET_RPC_PASS = 'ghost';
-
 function digestAuth(headers, method, uri, user, pass) {
   const { realm, nonce, qop } = (headers['www-authenticate'] || '').match(/(\w+)="([^"]*)"/g)
     .reduce((a, p) => { const [k, v] = p.split('='); a[k] = v.replace(/"/g, ''); return a; }, {});
@@ -100,7 +104,8 @@ function digestAuth(headers, method, uri, user, pass) {
   return `Digest username="${user}", realm="${realm}", nonce="${nonce}", uri="${uri}", qop=${qop}, nc=${nc}, cnonce="${cnonce}", response="${response}"`;
 }
 
-function walletRpcCall(method, params = {}, timeoutMs = 60000) {
+function walletRpcCall(method, params = {}, timeoutMs = 60000, buyerAgentId = 'me0003-buyer') {
+  const port = WALLET_PORT_MAP[buyerAgentId] || DEFAULT_WALLET_PORT;
   return new Promise((resolve, reject) => {
     const postData = JSON.stringify({ jsonrpc: '2.0', id: '0', method, params });
     const authHeader = digestAuth(
@@ -108,7 +113,7 @@ function walletRpcCall(method, params = {}, timeoutMs = 60000) {
       'POST', '/json_rpc', WALLET_RPC_USER, WALLET_RPC_PASS
     );
     const req = http.request({
-      hostname: WALLET_RPC_HOST, port: WALLET_RPC_PORT,
+      hostname: WALLET_RPC_HOST, port: port,
       path: '/json_rpc', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData), 'Authorization': authHeader },
       timeout: timeoutMs
@@ -120,7 +125,7 @@ function walletRpcCall(method, params = {}, timeoutMs = 60000) {
           // Retry with proper digest
           const newAuthHeader = digestAuth(res.headers || {}, 'POST', '/json_rpc', WALLET_RPC_USER, WALLET_RPC_PASS);
           const retryReq = http.request({
-            hostname: WALLET_RPC_HOST, port: WALLET_RPC_PORT,
+            hostname: WALLET_RPC_HOST, port: port,
             path: '/json_rpc', method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData), 'Authorization': newAuthHeader },
             timeout: timeoutMs
@@ -551,6 +556,7 @@ const server = http.createServer(async (req, res) => {
           seller_agent_id: neg.seller_agent_id,
           seller_monero_address: neg.seller_monero_address,
           buyer_monero_address: buyerReg.monero_address,
+          buyer_wallet_rpc_port: WALLET_PORT_MAP[neg.buyer_agent_id] || DEFAULT_WALLET_PORT,
           requested_service: neg.requested_service,
           job_description: neg.job_description,
           upstream_evidence_id: neg.upstream_evidence_id || null,
@@ -732,10 +738,10 @@ const server = http.createServer(async (req, res) => {
               const result = await walletRpcCall('transfer', {
                 destinations: [{ amount: atomicAmount, address: job.seller_monero_address }],
                 get_tx_key: true
-              });
+              }, 60000, job.buyer_agent_id);
               txHash = result.tx_hash;
               txFee = result.fee;
-              console.log(`[payment] SUCCESS: ${txHash} | fee: ${txFee} atomic | job: ${jid}`);
+              console.log(`[payment] SUCCESS: ${txHash} | fee: ${txFee} atomic | job: ${jid} | paying_wallet: port ${WALLET_PORT_MAP[job.buyer_agent_id] || DEFAULT_WALLET_PORT}`);
             } catch (transferErr) {
               paymentFailed = true;
               failureReason = transferErr.message;
@@ -826,10 +832,10 @@ const server = http.createServer(async (req, res) => {
               const result = await walletRpcCall('transfer', {
                 destinations: [{ amount: atomicAmount, address: job.seller_monero_address }],
                 get_tx_key: true
-              });
+              }, 60000, job.buyer_agent_id);
               txHash = result.tx_hash;
               txFee = result.fee;
-              console.log(`[payment-retry] SUCCESS: ${txHash} | fee: ${txFee} atomic | job: ${jid}`);
+              console.log(`[payment-retry] SUCCESS: ${txHash} | fee: ${txFee} atomic | job: ${jid} | paying_wallet: port ${WALLET_PORT_MAP[job.buyer_agent_id] || DEFAULT_WALLET_PORT}`);
             } catch (transferErr) {
               paymentFailed = true;
               failureReason = transferErr.message;
@@ -924,7 +930,7 @@ async function main() {
   console.log(`Data:     ${JOBS_FILE}`);
   console.log(`Evidence: ${EVIDENCE_DIR}`);
   console.log(`HTTP:     localhost:${PORT}`);
-  console.log(`Wallet:   localhost:${WALLET_RPC_PORT}`);
+  console.log(`Wallet:   port map: ${JSON.stringify(WALLET_PORT_MAP)}`);
   console.log('───────────────────────────────────────────────────────────');
   console.log('  POST /jobs/create           — create job from negotiation');
   console.log('  POST /jobs/:id/fund        — buyer funds escrow');
