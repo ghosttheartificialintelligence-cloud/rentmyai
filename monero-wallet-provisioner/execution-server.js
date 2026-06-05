@@ -216,6 +216,10 @@ function generateHumanSummary(job, txHash) {
   summary += `WHAT WAS DELIVERED:\n`;
   summary += `Seller (${seller}) submitted a completion proof.\n`;
   summary += `Submission time: ${job.submitted_at || '(unknown)'}\n\n`;
+  if (job.upstream_evidence_id) {
+    summary += `ARTIFACT CHAIN:\n`;
+    summary += `This job builds on upstream evidence: ${job.upstream_evidence_id}\n\n`;
+  }
   summary += `WHY PAYMENT OCCURRED:\n`;
   summary += `Buyer (${buyer}) reviewed the submission and approved payment\n`;
   summary += `of ${xmrAmount} XMR to ${seller}.\n\n`;
@@ -252,6 +256,36 @@ async function generateEvidenceRecord(job) {
   const txFeeAtomic = parseInt(job.monero_tx_fee) || 0;
 
   // Build the evidence record
+  // ME-0006: Load upstream artifact if this job has a chained dependency
+  let upstreamArtifact = null;
+  if (job.upstream_evidence_id) {
+    try {
+      const upstreamFile = path.join(EVIDENCE_DIR, `${job.upstream_evidence_id}.json`);
+      if (fs.existsSync(upstreamFile)) {
+        const upstreamRec = JSON.parse(fs.readFileSync(upstreamFile, 'utf8'));
+        if (upstreamRec.artifact) {
+          upstreamArtifact = {
+            jer_id: upstreamRec.jer_id,
+            job_id: upstreamRec.job_id,
+            artifact_type: upstreamRec.artifact.artifact_type,
+            produced_by: upstreamRec.artifact.produced_by,
+            produced_at: upstreamRec.artifact.produced_at,
+            artifact_data: upstreamRec.artifact.artifact_data
+          };
+        }
+      }
+    } catch {}
+  }
+
+  const artifact = job.completion_proof ? {
+    artifact_id: `artifact-${jerId}`,
+    artifact_type: 'completion_proof',
+    produced_by: job.seller_agent_id,
+    produced_at: job.submitted_at || now(),
+    artifact_data: job.completion_proof,
+    upstream_artifact: upstreamArtifact
+  } : null;
+
   const evidenceRecord = {
     schema_version: '1.0',
     jer_id: jerId,
@@ -276,6 +310,7 @@ async function generateEvidenceRecord(job) {
     job_definition: {
       service_type: job.requested_service,
       task_description: job.job_description,
+      upstream_evidence_id: job.upstream_evidence_id || null,
       agreed_rate: job.agreed_rate,
       rate_unit: job.rate_unit
     },
@@ -306,15 +341,7 @@ async function generateEvidenceRecord(job) {
       human_readable_summary: generateHumanSummary(job, job.monero_tx_hash).split('\n').slice(0, 3).join(' ').trim()
     },
 
-    // Artifact: store the completion_proof as an artifact
-    // Agent-agnostic — any agent's output format is acceptable
-    artifact: job.completion_proof ? {
-      artifact_id: `artifact-${jerId}`,
-      artifact_type: 'completion_proof',
-      produced_by: job.seller_agent_id,
-      produced_at: job.submitted_at || now(),
-      artifact_data: job.completion_proof
-    } : null,
+    artifact,
 
     audit_trail: job.audit_log.map(e => ({
       ts: e.ts,
@@ -526,6 +553,7 @@ const server = http.createServer(async (req, res) => {
           buyer_monero_address: buyerReg.monero_address,
           requested_service: neg.requested_service,
           job_description: neg.job_description,
+          upstream_evidence_id: neg.upstream_evidence_id || null,
           agreed_rate: neg.final_rate,
           rate_unit: neg.rate_unit,
           status: 'job_created',
@@ -623,6 +651,13 @@ const server = http.createServer(async (req, res) => {
               throw Object.assign(new Error('Only the seller can start the job'), { code: 403 });
             if (job.status !== 'escrow_funded')
               throw Object.assign(new Error(`Cannot start in status: ${job.status}. Escrow must be funded.`), { code: 409 });
+            // ME-0006: Validate upstream evidence if this job references one
+            if (job.upstream_evidence_id) {
+              const upstreamFile = path.join(EVIDENCE_DIR, `${job.upstream_evidence_id}.json`);
+              if (!fs.existsSync(upstreamFile)) {
+                throw Object.assign(new Error(`Upstream evidence '${job.upstream_evidence_id}' not found. Cannot start chained job.`), { code: 409 });
+              }
+            }
             job.status = 'in_progress';
             job.started_at = now();
             job.audit_log.push(auditEntry('job_started', starter_agent_id));

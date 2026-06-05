@@ -128,9 +128,11 @@ function buildNegotiation(n) {
     seller_monero_address: n.seller_monero_address,
     requested_service: n.requested_service,
     job_definition: {
-      task_description: n.job_description
+      task_description: n.job_description,
+      upstream_evidence_id: n.upstream_evidence_id || null
     },
-    job_description: n.job_description, // backward compatibility
+    job_description: n.job_description,
+    upstream_evidence_id: n.upstream_evidence_id || null,
     proposed_rate: n.proposed_rate,
     counter_rate: n.counter_rate,
     final_rate: n.final_rate,
@@ -191,6 +193,8 @@ const server = http.createServer(async (req, res) => {
         if (!requested_service || typeof requested_service !== 'string') throw Object.assign(new Error('requested_service required'), { code: 400 });
         // job_definition.task_description is the preferred field; job_description is accepted for backward compatibility
         const taskDescription = job_definition?.task_description || job_description || null;
+        // upstream_evidence_id: reference to a prior job's evidence record for chained workflows
+        const upstreamEvidenceId = job_definition?.upstream_evidence_id || null;
         const rate = validateRate(proposed_rate, 'proposed_rate');
 
         if (buyer_agent_id === seller_agent_id) {
@@ -222,6 +226,7 @@ const server = http.createServer(async (req, res) => {
           seller_monero_address: sellerReg.monero_address,
           requested_service,
           job_description: taskDescription,
+          upstream_evidence_id: upstreamEvidenceId,
           proposed_rate: rate,
           counter_rate: null,
           final_rate: null,
