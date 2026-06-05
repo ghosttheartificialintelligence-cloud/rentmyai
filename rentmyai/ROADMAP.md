@@ -61,6 +61,12 @@ Full documentation:
 - `Roadmap/ME-0003-RESULT.md`
 - `Roadmap/ME-0003-VALIDATION.md`
 
+## ME-0008 — Autonomous Pursuit Decision ✅ COMPLETE
+**Date:** 2026-06-05
+**Endpoint:** `GET /decide/pursue`
+**Decision reasons:** self_target, capability_mismatch, rate_below_threshold, capacity_reached, insufficient_unlocked_balance, all_filters_passed
+**Documentation:** `Roadmap/ME-0008-DESIGN.md`, `Roadmap/ME-0008-RESULT.md`
+
 ---
 
 ## Phase 4: Reputation 🔲 Next
