@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Agent Execution Service
- * RentMyAI.ai — Level 3 Phase 3.5 + ME-0004 Phase A + ME-0010 Steps 1-3
+ * RentMyAI.ai — Level 3 Phase 3.5 + ME-0004 Phase A + ME-0010 Steps 1-5
  *
  * State flow:
  *   job_created → escrow_funded → in_progress → submitted → paid
@@ -30,6 +30,12 @@
  *   - Parent approval blocked until child is paid
  *   - Evidence includes: child_job_id, child_tx_hash, contractor_margin on parent job
  *   - Evidence includes: parent_job_id on child job
+ *
+ * ME-0010 Step 5: Role-Annotated Reputation Events
+ *   - Dynamic role annotation: original_buyer | contractor | subcontractor | seller
+ *   - parent_job_id / child_job_id linkage on all events
+ *   - subcontract_initiated event when contractor creates child job
+ *   - job_created events for child job with parent_job_id
  */
 
 const http = require('http');
@@ -469,7 +475,7 @@ const server = http.createServer(async (req, res) => {
   // GET /health
   if (url.pathname === '/health' && req.method === 'GET') {
     res.writeHead(200);
-    res.end(JSON.stringify({ status: 'ok', service: 'execution', version: '1.9.0', milestone: 'ME-0010-Step3' }));
+    res.end(JSON.stringify({ status: 'ok', service: 'execution', version: '1.10.0', milestone: 'ME-0010-Step5' }));
     return;
   }
 
@@ -920,6 +926,19 @@ const server = http.createServer(async (req, res) => {
         }
 
         // All filters passed — accept
+        // Emit subcontract_accepted reputation event (ME-0010 Step 5)
+        const childJobForEvent = store.jobs[child_job_id];
+        emitReputationEvent({
+          agent_id,
+          event_type: 'subcontract_accepted',
+          job_id: child_job_id,
+          role: 'subcontractor',
+          parent_job_id: childJobForEvent ? childJobForEvent.parent_job_id : null,
+          rate: childJobForEvent ? childJobForEvent.agreed_rate : null,
+          rate_unit: 'XMR',
+          verification_source: 'execution_service'
+        });
+
         res.writeHead(200);
         res.end(JSON.stringify({
           agent_id,
@@ -1211,36 +1230,67 @@ const server = http.createServer(async (req, res) => {
 
               const amountStr = atomicAmount.toString();
 
+              // ── ME-0010 Step 5: Dynamic role annotation based on economic role ─
+              // Determine economic role for buyer (payer) and seller (receiver)
+              const isChildJob = !!job.parent_job_id;
+              const isContractorJob = job.role === 'contractor';
+
+              // Buyer roles: 'original_buyer' | 'contractor' | 'subcontractor'
+              let buyerRole = 'original_buyer';
+              if (isChildJob) buyerRole = 'contractor';
+
+              // Seller roles: 'seller' | 'contractor' | 'subcontractor'
+              let sellerRole = 'seller';
+              if (isChildJob) sellerRole = 'subcontractor';
+              else if (isContractorJob) sellerRole = 'contractor';
+
+              // job_completed for buyer
               emitReputationEvent({
                 agent_id: job.buyer_agent_id,
                 event_type: 'job_completed',
                 job_id: jid,
-                role: 'buyer',
+                role: buyerRole,
+                parent_job_id: isChildJob ? job.parent_job_id : null,
+                child_job_id: job.child_job_id || null,
                 amount_atomic: amountStr,
                 tx_hash: txHash,
                 verification_source: 'execution_service'
               });
+
+              // job_completed for seller
               emitReputationEvent({
                 agent_id: job.seller_agent_id,
                 event_type: 'job_completed',
                 job_id: jid,
-                role: 'seller',
+                role: sellerRole,
+                parent_job_id: isChildJob ? job.parent_job_id : null,
+                child_job_id: job.child_job_id || null,
                 amount_atomic: amountStr,
                 tx_hash: txHash,
                 verification_source: 'execution_service'
               });
+
+              // payment_sent for buyer (payer)
               emitReputationEvent({
                 agent_id: job.buyer_agent_id,
                 event_type: 'payment_sent',
                 job_id: jid,
+                role: buyerRole,
+                parent_job_id: isChildJob ? job.parent_job_id : null,
+                child_job_id: job.child_job_id || null,
                 amount_atomic: amountStr,
                 tx_hash: txHash,
                 verification_source: 'blockchain'
               });
+
+              // payment_received for seller (receiver)
               emitReputationEvent({
                 agent_id: job.seller_agent_id,
                 event_type: 'payment_received',
                 job_id: jid,
+                role: sellerRole,
+                parent_job_id: isChildJob ? job.parent_job_id : null,
+                child_job_id: job.child_job_id || null,
                 amount_atomic: amountStr,
                 tx_hash: txHash,
                 verification_source: 'blockchain'
@@ -1311,10 +1361,17 @@ const server = http.createServer(async (req, res) => {
               `TX: ${txHash} | fee: ${txFee} atomic | rate: ${job.agreed_rate} ${job.rate_unit}`));
 
             const amountStr = atomicAmount.toString();
-            emitReputationEvent({ agent_id: job.buyer_agent_id, event_type: 'job_completed', job_id: jid, role: 'buyer', amount_atomic: amountStr, tx_hash: txHash, verification_source: 'execution_service' });
-            emitReputationEvent({ agent_id: job.seller_agent_id, event_type: 'job_completed', job_id: jid, role: 'seller', amount_atomic: amountStr, tx_hash: txHash, verification_source: 'execution_service' });
-            emitReputationEvent({ agent_id: job.buyer_agent_id, event_type: 'payment_sent', job_id: jid, amount_atomic: amountStr, tx_hash: txHash, verification_source: 'blockchain' });
-            emitReputationEvent({ agent_id: job.seller_agent_id, event_type: 'payment_received', job_id: jid, amount_atomic: amountStr, tx_hash: txHash, verification_source: 'blockchain' });
+
+            // ── ME-0010 Step 5: Dynamic role annotation (retry-payment path) ─
+            const isChildJob = !!job.parent_job_id;
+            const isContractorJob = job.role === 'contractor';
+            let buyerRole = isChildJob ? 'contractor' : 'original_buyer';
+            let sellerRole = isChildJob ? 'subcontractor' : (isContractorJob ? 'contractor' : 'seller');
+
+            emitReputationEvent({ agent_id: job.buyer_agent_id, event_type: 'job_completed', job_id: jid, role: buyerRole, parent_job_id: isChildJob ? job.parent_job_id : null, child_job_id: job.child_job_id || null, amount_atomic: amountStr, tx_hash: txHash, verification_source: 'execution_service' });
+            emitReputationEvent({ agent_id: job.seller_agent_id, event_type: 'job_completed', job_id: jid, role: sellerRole, parent_job_id: isChildJob ? job.parent_job_id : null, child_job_id: job.child_job_id || null, amount_atomic: amountStr, tx_hash: txHash, verification_source: 'execution_service' });
+            emitReputationEvent({ agent_id: job.buyer_agent_id, event_type: 'payment_sent', job_id: jid, role: buyerRole, parent_job_id: isChildJob ? job.parent_job_id : null, child_job_id: job.child_job_id || null, amount_atomic: amountStr, tx_hash: txHash, verification_source: 'blockchain' });
+            emitReputationEvent({ agent_id: job.seller_agent_id, event_type: 'payment_received', job_id: jid, role: sellerRole, parent_job_id: isChildJob ? job.parent_job_id : null, child_job_id: job.child_job_id || null, amount_atomic: amountStr, tx_hash: txHash, verification_source: 'blockchain' });
 
             // Generate evidence record on successful payment retry
             try {
@@ -1446,6 +1503,40 @@ const server = http.createServer(async (req, res) => {
             saveJobs(store);
             console.log(`[api] SUBCONTRACT: parent=${jid} | child=${childJid} | subcontractor=${subcontractor_agent_id} | rate=${child_rate} XMR`);
 
+            // ── ME-0010 Step 5: Reputation events for child job ─────────────
+            // Child job: contractor (buyer on child) → role: 'contractor', has parent_job_id
+            emitReputationEvent({
+              agent_id: contractor_agent_id,
+              event_type: 'job_created',
+              job_id: childJid,
+              negotiation_id: null,
+              role: 'contractor',
+              parent_job_id: jid,
+              verification_source: 'execution_service'
+            });
+            // Child job: subcontractor (seller on child) → role: 'subcontractor', has parent_job_id
+            emitReputationEvent({
+              agent_id: subcontractor_agent_id,
+              event_type: 'job_created',
+              job_id: childJid,
+              negotiation_id: null,
+              role: 'subcontractor',
+              parent_job_id: jid,
+              verification_source: 'execution_service'
+            });
+            // Subcontract initiated: contractor announced they are hiring for this job
+            emitReputationEvent({
+              agent_id: contractor_agent_id,
+              event_type: 'subcontract_initiated',
+              job_id: jid,
+              role: 'contractor',
+              child_job_id: childJid,
+              subcontractor_agent_id,
+              rate: parseFloat(child_rate).toFixed(6),
+              rate_unit: 'XMR',
+              verification_source: 'execution_service'
+            });
+
             res.writeHead(200);
             res.end(JSON.stringify({
               parent_job: job,
@@ -1482,8 +1573,8 @@ async function main() {
   fs.mkdirSync(EVIDENCE_DIR, { mode: 0o700, recursive: true });
 
   console.log('═══════════════════════════════════════════════════════════');
-  console.log('   Agent Execution Service v1.9');
-  console.log('   RentMyAI.ai — ME-0010 Step 3 (Settlement Chain)');
+  console.log('   Agent Execution Service v1.10');
+  console.log('   RentMyAI.ai — ME-0010 Step 5 (Reputation Events)');
   console.log('═══════════════════════════════════════════════════════════');
   console.log(`Data:     ${JOBS_FILE}`);
   console.log(`Evidence: ${EVIDENCE_DIR}`);
@@ -1508,7 +1599,7 @@ async function main() {
   console.log('═══════════════════════════════════════════════════════════');
 
   server.listen(PORT, '127.0.0.1', () => {
-    console.log(`[init] Execution service v1.9 listening on port ${PORT}`);
+    console.log(`[init] Execution service v1.10 listening on port ${PORT}`);
   });
 }
 
