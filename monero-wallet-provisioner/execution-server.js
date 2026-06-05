@@ -32,6 +32,7 @@ const EVIDENCE_DIR = path.join(JOBS_DIR, 'evidence');
 const ARTIFACTS_DIR = path.join(EVIDENCE_DIR, 'artifacts');
 const NEGOTIATE_URL = 'http://127.0.0.1:18093';
 const REGISTRY_URL = 'http://127.0.0.1:18092';
+const DISCOVERY_URL = 'http://127.0.0.1:18096';
 const WALLET_RPC_HOST = '127.0.0.1';
 const WALLET_RPC_USER = 'ghost';
 const WALLET_RPC_PASS = 'ghost';
@@ -523,6 +524,134 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify(record));
     return;
   }
+  // ── GET /decide/pursue ────────────────────────────────────────────────────
+  // Decision engine: given an agent_id and opportunity_id, should the agent pursue?
+  // Applies hard filters: capability, capacity, rate, budget, self-target
+  // Returns { decision, decision_reason, auto_propose, propose_params }
+  if (url.pathname === '/decide/pursue' && req.method === 'GET') {
+    const { agent_id, opportunity_id } = (() => {
+      const u = new URL(req.url, 'http://127.0.0.1');
+      return { agent_id: u.searchParams.get('agent_id'), opportunity_id: u.searchParams.get('opportunity_id') };
+    })();
+
+    if (!agent_id || !opportunity_id) {
+      res.writeHead(400);
+      res.end(JSON.stringify({ error: 'agent_id and opportunity_id are required' }));
+      return;
+    }
+
+    // Hard filters
+    let decision = 'skip';
+    let decision_reason = 'all_filters_passed';
+
+    (async () => {
+      try {
+        // 1. Fetch the opportunity from discovery service
+        const opp = await httpGet(`${DISCOVERY_URL}/opportunities/${opportunity_id}`);
+        if (!opp || opp.error) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ error: 'Opportunity not found', decision: 'skip', decision_reason: 'opportunity_not_found' }));
+          return;
+        }
+
+        // 2. Fetch agent capabilities from registry
+        const reg = await httpGet(`${REGISTRY_URL}/registry/${encodeURIComponent(agent_id)}`);
+        if (!reg || reg.error) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ error: 'Agent not in registry', decision: 'skip', decision_reason: 'agent_not_registered' }));
+          return;
+        }
+
+        const myServices = reg.services_offered || [];
+        const myMinRate = parseFloat(reg.default_rate) || 0;
+
+        // 3. Self-target check — can't sell to yourself
+        if (opp.owner_agent_id === agent_id) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, opportunity_id, decision: 'skip', decision_reason: 'self_target', auto_propose: false }));
+          return;
+        }
+
+        // 4. Capability check
+        if (opp.service_type && !myServices.includes(opp.service_type)) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, opportunity_id, decision: 'skip', decision_reason: 'capability_mismatch', auto_propose: false }));
+          return;
+        }
+
+        // 5. Rate threshold check
+        const oppRate = parseFloat(opp.rate) || 0;
+        if (oppRate < myMinRate) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, opportunity_id, decision: 'skip', decision_reason: 'rate_below_threshold', auto_propose: false }));
+          return;
+        }
+
+        // 6. Capacity check — count active jobs for this agent
+        const store = loadJobs();
+        const activeJobs = Object.values(store.jobs).filter(j => {
+          const isParty = j.buyer_agent_id === agent_id || j.seller_agent_id === agent_id;
+          const isActive = ['job_created', 'escrow_funded', 'in_progress'].includes(j.status);
+          return isParty && isActive;
+        });
+        const MAX_ACTIVE = 3;
+        if (activeJobs.length >= MAX_ACTIVE) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ agent_id, opportunity_id, decision: 'skip', decision_reason: 'capacity_reached', auto_propose: false }));
+          return;
+        }
+
+        // 7. Budget check — only relevant if this agent is the buyer (direction=available means seller posts)
+        // me0003-buyer and clawbuddy-2 can be buyers; clawbuddy-3 is primarily seller
+        // If direction == 'available', the posting agent is the seller, so the buyer (any) is evaluating
+        // For simplicity: if agent_id is NOT the seller (opp.owner when direction=available), check budget
+        const isSeller = opp.direction === 'available' ? opp.owner_agent_id === agent_id : false;
+        if (!isSeller && opp.direction === 'available') {
+          // This agent would be the buyer — check unlocked balance
+          const buyerPort = reg.wallet_rpc_port || WALLET_PORT_MAP[agent_id] || DEFAULT_WALLET_PORT;
+          const balanceResult = await walletRpcCall('get_balance', {}, 10000, agent_id);
+          if (balanceResult && balanceResult.unlocked_balance !== undefined) {
+            const unlocked = parseInt(balanceResult.unlocked_balance) / 1e12;
+            if (unlocked < oppRate) {
+              res.writeHead(200);
+              res.end(JSON.stringify({ agent_id, opportunity_id, decision: 'skip', decision_reason: 'insufficient_unlocked_balance', auto_propose: false }));
+              return;
+            }
+          }
+        }
+
+        // All filters passed — proceed
+        const proposeParams = {
+          buyer_agent_id: opp.direction === 'available' ? agent_id : opp.owner_agent_id,
+          seller_agent_id: opp.direction === 'available' ? opp.owner_agent_id : agent_id,
+          seller_monero_address: opp.direction === 'available' ? opp.owner_monero_address : reg.monero_address,
+          requested_service: opp.service_type,
+          job_definition: {
+            task_description: opp.task_description || `Opportunity: ${opportunity_id}`,
+            upstream_evidence_id: opp.upstream_evidence_id || null
+          },
+          proposed_rate: opp.rate
+        };
+
+        res.writeHead(200);
+        res.end(JSON.stringify({
+          agent_id,
+          opportunity_id,
+          decision: 'proceed',
+          decision_reason: 'all_filters_passed',
+          auto_propose: true,
+          propose_params: proposeParams
+        }));
+
+      } catch (err) {
+        console.error('[decide] Error:', err.message);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: err.message, decision: 'skip', decision_reason: 'internal_error' }));
+      }
+    })();
+    return;
+  }
+
   // ── POST /jobs/create ──────────────────────────────────────────────────────
   if (url.pathname === '/jobs/create' && req.method === 'POST') {
     let body = '';
@@ -947,6 +1076,7 @@ async function main() {
   console.log('  GET  /evidence            — list all evidence records');
   console.log('  GET  /evidence/:job_id    — get evidence record JSON');
   console.log('  GET  /evidence/:job_id/summary — human-readable summary');
+  console.log('  GET  /decide/pursue       — decision engine: should agent pursue?');
   console.log('═══════════════════════════════════════════════════════════');
 
   server.listen(PORT, '127.0.0.1', () => {
