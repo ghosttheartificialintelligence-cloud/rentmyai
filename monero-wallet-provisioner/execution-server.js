@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Agent Execution Service
- * RentMyAI.ai — Level 3 Phase 3.5 + ME-0004 Phase A (Evidence Records)
+ * RentMyAI.ai — Level 3 Phase 3.5 + ME-0004 Phase A + ME-0010 Step 1
  *
  * State flow:
  *   job_created → escrow_funded → in_progress → submitted → paid
@@ -15,6 +15,12 @@
  *   - Stored as immutable JSON in /agents/evidence/
  *   - Agent-agnostic artifact schema
  *   - Human-readable summary included
+ *
+ * ME-0010 Step 1: Subcontracting
+ *   - POST /jobs/:id/subcontract — contractor creates one child job (depth=1, one child per parent)
+ *   - GET  /jobs/:id/children    — list child jobs for a parent
+ *   - Fields: parent_job_id, child_job_id, role, subcontract_depth, child_description
+ *   - Settlement logic NOT implemented yet (Step 3)
  */
 
 const http = require('http');
@@ -39,8 +45,9 @@ const WALLET_RPC_PASS = 'ghost';
 const DEFAULT_WALLET_PORT = 18089;
 // Per-agent wallet RPC port map — each buyer agent must have a registered wallet on a unique port
 const WALLET_PORT_MAP = {
-  'me0003-buyer': 18089,
-  'clawbuddy-3':  18091,
+  'me0003-buyer':  18089,
+  'clawbuddy-3':   18091,
+  'ghost_final2':  18087,
 };
 const REPUTATION_URL = 'http://127.0.0.1:18095';
 
@@ -162,7 +169,7 @@ function walletRpcCall(method, params = {}, timeoutMs = 60000, buyerAgentId = 'm
 }
 
 function parseJobIdFromPath(pathname) {
-  const m = pathname.match(/^\/jobs\/(.+?)\/(?:fund|start|submit|approve|dispute|retry-payment)$/);
+  const m = pathname.match(/^\/jobs\/(.+?)\/(?:fund|start|submit|approve|dispute|retry-payment|subcontract)$/);
   return m ? m[1] : null;
 }
 
@@ -422,7 +429,7 @@ const server = http.createServer(async (req, res) => {
   // GET /health
   if (url.pathname === '/health' && req.method === 'GET') {
     res.writeHead(200);
-    res.end(JSON.stringify({ status: 'ok', service: 'execution', version: '1.6.0', milestone: 'ME-0004-PhA' }));
+    res.end(JSON.stringify({ status: 'ok', service: 'execution', version: '1.7.0', milestone: 'ME-0010-Step1' }));
     return;
   }
 
@@ -431,6 +438,24 @@ const server = http.createServer(async (req, res) => {
     const store = loadJobs();
     res.writeHead(200);
     res.end(JSON.stringify({ jobs: Object.values(store.jobs), count: Object.keys(store.jobs).length }));
+    return;
+  }
+
+  // GET /jobs/:job_id/children — ME-0010: must come before generic /jobs/:id
+  const childrenMatch = url.pathname.match(/^\/jobs\/(.+)\/children$/);
+  if (childrenMatch && req.method === 'GET') {
+    const store = loadJobs();
+    const j = store.jobs[childrenMatch[1]];
+    if (!j) { res.writeHead(404); res.end(JSON.stringify({ error: 'Job not found' })); return; }
+    const childId = j.child_job_id;
+    if (!childId) {
+      res.writeHead(200);
+      res.end(JSON.stringify({ children: [], count: 0 }));
+      return;
+    }
+    const childJob = store.jobs[childId];
+    res.writeHead(200);
+    res.end(JSON.stringify({ children: childJob ? [childJob] : [], count: childJob ? 1 : 0 }));
     return;
   }
 
@@ -803,6 +828,13 @@ const server = http.createServer(async (req, res) => {
           upstream_evidence_id: neg.upstream_evidence_id || null,
           agreed_rate: neg.final_rate,
           rate_unit: neg.rate_unit,
+          // ME-0010: Subcontracting fields
+          parent_job_id: null,
+          child_job_id: null,
+          role: 'seller', // 'seller' = direct job, 'contractor' = parent job with subcontract
+          subcontract_depth: 0,
+          child_description: null,
+          //
           status: 'job_created',
           escrow_funded: false,
           escrow_funded_at: null,
@@ -864,6 +896,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.endsWith('/approve')) return 'approve';
     if (url.pathname.endsWith('/dispute')) return 'dispute';
     if (url.pathname.endsWith('/retry-payment')) return 'retry-payment';
+    if (url.pathname.endsWith('/subcontract')) return 'subcontract';
     return null;
   })();
 
@@ -1137,6 +1170,116 @@ const server = http.createServer(async (req, res) => {
             job.audit_log.push(auditEntry('job_disputed', disputer_agent_id, reason || 'No reason provided'));
             break;
           }
+
+          // ── ME-0010: POST /jobs/:id/subcontract ────────────────────────
+          // Contractor creates one child job for a parent job.
+          // One child per parent (enforced). Depth = 1 only.
+          // Child sees only child_description — not full parent details.
+          case 'subcontract': {
+            const { contractor_agent_id, subcontractor_agent_id, child_rate, child_description } = JSON.parse(body);
+            validateId(contractor_agent_id, 'contractor');
+            validateId(subcontractor_agent_id, 'subcontractor');
+
+            // Must be the seller on the parent job (contractor role)
+            if (contractor_agent_id !== job.seller_agent_id)
+              throw Object.assign(new Error('Only the seller (contractor) can create a subcontract'), { code: 403 });
+
+            // Parent must be active (can subcontract from in_progress or submitted)
+            if (!['in_progress', 'submitted'].includes(job.status))
+              throw Object.assign(new Error(`Cannot subcontract while in status: ${job.status}`), { code: 409 });
+
+            // Depth = 1: contractor cannot subcontract if they are already a subcontractor
+            if (job.subcontract_depth > 0)
+              throw Object.assign(new Error('Depth = 1: agents cannot subcontract more than one level'), { code: 409 });
+
+            // One child per parent enforcement
+            if (job.child_job_id)
+              throw Object.assign(new Error(`Parent job already has a child job: ${job.child_job_id}. One child per parent.`), { code: 409 });
+
+            if (!child_rate || parseFloat(child_rate) <= 0)
+              throw Object.assign(new Error('child_rate required and must be positive'), { code: 400 });
+
+            if (!child_description || typeof child_description !== 'string')
+              throw Object.assign(new Error('child_description required'), { code: 400 });
+
+            // Fetch subcontractor registry record
+            const subReg = await httpGet(`${REGISTRY_URL}/registry/${encodeURIComponent(subcontractor_agent_id)}`);
+            if (!subReg || subReg.error)
+              throw Object.assign(new Error(`Subcontractor not in registry: ${subcontractor_agent_id}`), { code: 404 });
+
+            // Fetch contractor registry record (for wallet info)
+            const conReg = await httpGet(`${REGISTRY_URL}/registry/${encodeURIComponent(contractor_agent_id)}`);
+            if (!conReg || conReg.error)
+              throw Object.assign(new Error(`Contractor not in registry: ${contractor_agent_id}`), { code: 409 });
+
+            const childJid = jobId();
+            const ts = now();
+
+            // Child job: contractor = buyer, subcontractor = seller
+            const childJob = {
+              job_id: childJid,
+              negotiation_id: null,
+              buyer_agent_id: contractor_agent_id,
+              seller_agent_id: subcontractor_agent_id,
+              seller_monero_address: subReg.monero_address,
+              buyer_monero_address: conReg.monero_address,
+              // Contractor (buyer of child) pays from their own wallet
+              buyer_wallet_rpc_port: conReg.wallet_rpc_port || WALLET_PORT_MAP[contractor_agent_id] || DEFAULT_WALLET_PORT,
+              requested_service: job.requested_service,
+              job_description: child_description, // Only child_description exposed to subcontractor
+              upstream_evidence_id: null,
+              agreed_rate: parseFloat(child_rate).toFixed(6),
+              rate_unit: 'XMR',
+              // ME-0010 subcontracting fields
+              parent_job_id: jid,
+              child_job_id: null,
+              role: 'subcontractor', // this agent is the subcontractor on the child job
+              subcontract_depth: 1, // depth = 1 hard cap
+              child_description: child_description,
+              //
+              status: 'job_created',
+              escrow_funded: false,
+              escrow_funded_at: null,
+              started_at: null,
+              submitted_at: null,
+              completion_proof: null,
+              approved_at: null,
+              disputed_at: null,
+              dispute_reason: null,
+              payment_requested_at: null,
+              monero_transfer_attempted_at: null,
+              monero_tx_hash: null,
+              monero_tx_fee: null,
+              payment_failed_at: null,
+              payment_failure_reason: null,
+              audit_log: [
+                auditEntry('job_created', contractor_agent_id, `Subcontract child job for parent ${jid}`),
+                auditEntry('subcontract_created', 'system', `Child job ${childJid} | rate: ${child_rate} XMR | subcontractor: ${subcontractor_agent_id}`)
+              ],
+              created_at: ts,
+              updated_at: ts
+            };
+
+            store.jobs[childJid] = childJob;
+
+            // Link child to parent
+            job.child_job_id = childJid;
+            job.role = 'contractor'; // now this agent is a contractor on the parent
+            job.updated_at = now();
+            job.audit_log.push(auditEntry('subcontract_initiated', contractor_agent_id,
+              `Child job ${childJid} created for subcontractor ${subcontractor_agent_id} at ${child_rate} XMR`));
+
+            saveJobs(store);
+            console.log(`[api] SUBCONTRACT: parent=${jid} | child=${childJid} | subcontractor=${subcontractor_agent_id} | rate=${child_rate} XMR`);
+
+            res.writeHead(200);
+            res.end(JSON.stringify({
+              parent_job: job,
+              child_job: childJob
+            }));
+            return;
+          }
+
         }
 
         job.updated_at = now();
@@ -1165,8 +1308,8 @@ async function main() {
   fs.mkdirSync(EVIDENCE_DIR, { mode: 0o700, recursive: true });
 
   console.log('═══════════════════════════════════════════════════════════');
-  console.log('   Agent Execution Service v1.6');
-  console.log('   RentMyAI.ai — Level 3 Phase 3.5 + ME-0004 Phase A');
+  console.log('   Agent Execution Service v1.7');
+  console.log('   RentMyAI.ai — ME-0010 Step 1 (Subcontracting)');
   console.log('═══════════════════════════════════════════════════════════');
   console.log(`Data:     ${JOBS_FILE}`);
   console.log(`Evidence: ${EVIDENCE_DIR}`);
@@ -1179,6 +1322,8 @@ async function main() {
   console.log('  POST /jobs/:id/submit      — seller submits completion');
   console.log('  POST /jobs/:id/approve     — buyer approves → REAL XMR');
   console.log('  POST /jobs/:id/dispute      — either party disputes');
+  console.log('  POST /jobs/:id/subcontract — ME-0010: create child job (contractor only)');
+  console.log('  GET  /jobs/:id/children   — ME-0010: list child jobs for parent');
   console.log('  GET  /jobs/:id             — job details');
   console.log('  GET  /jobs                — list all jobs');
   console.log('  GET  /evidence            — list all evidence records');
@@ -1189,7 +1334,7 @@ async function main() {
   console.log('═══════════════════════════════════════════════════════════');
 
   server.listen(PORT, '127.0.0.1', () => {
-    console.log(`[init] Execution service v1.6 listening on port ${PORT}`);
+    console.log(`[init] Execution service v1.7 listening on port ${PORT}`);
   });
 }
 
