@@ -208,6 +208,28 @@ The machine economy experienced a **complete infrastructure failure** during thi
 
 ---
 
+## LLM Timeout Incident (Post-Recovery)
+
+During this session, an LLM timeout occurred while sending a large report via Telegram.
+
+**Classification: Configuration Issue**
+
+| Detail | Value |
+|--------|-------|
+| Provider | MiniMax M2.7-highspeed via minimax |
+| Context size | 122k/200k tokens (61%) — not oversized |
+| Previous timeout | ~120s implicit default (per schema hint) |
+| New timeout | 300s (applied post-incident) |
+| Root cause | Large human-facing report exceeded provider default |
+
+**Fix applied:** Added `"timeoutSeconds": 300` to `models.providers.minimax` in `/Users/ghost/.openclaw/openclaw.json`. Gateway restarted.
+
+**Best practice adopted:** For large reports (>5k words), write to a file and send a summary/link rather than a direct Telegram message. Large report files are committed to the repo for traceability.
+
+**Not systemic:** Agent-to-agent sub-agent workflows run in isolated sessions and are unaffected.
+
+---
+
 ## Deliverables
 
 ### Monitoring Inventory
@@ -233,29 +255,33 @@ The machine economy experienced a **complete infrastructure failure** during thi
 
 ### Remaining Operational Risks
 
-| Risk | Severity | Mitigation |
-|------|----------|------------|
-| No automated wallet monitoring | HIGH | Create wallet health check cron |
-| No automated service health polling | HIGH | Create health check cron |
-| No alert on blockchain stall | HIGH | Add block height delta check |
-| Buyer/seller wallets have no LaunchAgents | HIGH | Create LaunchAgents |
-| Ghost wallet LaunchAgent has wrong flags | MEDIUM | Fix plist with --disable-rpc-login |
-| Evidence dir not in backup | MEDIUM | Add to WALLET-CUSTODY.md |
-| 0 incoming daemon peers | MEDIUM | Investigate network config |
-| TX pool growing (45 txs stuck) | MEDIUM | Monitor, don't restart daemon |
+| Risk | Severity | Status |
+|------|----------|--------|
+| No automated wallet monitoring | HIGH | PENDING |
+| No automated service health polling | HIGH | PENDING |
+| No alert on blockchain stall | HIGH | PENDING |
+| Buyer/seller wallets have no LaunchAgents | HIGH | ✅ RESOLVED |
+| Ghost wallet LaunchAgent has wrong flags | MEDIUM | ✅ RESOLVED |
+| LLM timeout on large responses | MEDIUM | ✅ RESOLVED (300s timeout) |
+| Evidence dir not in backup | MEDIUM | ✅ RESOLVED |
+| 0 incoming daemon peers | MEDIUM | PENDING |
+| TX pool growing (45 txs stuck) | MEDIUM | MONITORING |
+| No tested backup recovery | HIGH | PENDING |
 
 ---
 
 ## Recommended Next Steps (Priority Order)
 
-1. **Create LaunchAgents for buyer and seller wallets** (18089, 18091) with `--disable-rpc-login`
-2. **Fix ghost wallet LaunchAgent** — add `--disable-rpc-login`
-3. **Create health check cron job** — checks all wallet ports, all service ports, daemon height every 5 minutes
-4. **Add block height delta check** — alert if no new block in 10 minutes
-5. **Add evidence directory to backup inventory** in WALLET-CUSTODY.md
-6. **Add incoming peer monitoring** — alert when incoming = 0
-7. **Test all backup recoveries** — actually restore from backup, don't just document
-8. **Create wallet credential backup procedure** — back up `.agent-cred-*` files
+1. ~~Create LaunchAgents for buyer and seller wallets~~ ✅ DONE
+2. ~~Fix ghost wallet LaunchAgent~~ ✅ DONE (added --disable-rpc-login)
+3. ~~Apply LLM timeout fix~~ ✅ DONE (300s timeout on minimax provider)
+4. **Create health check cron job** — checks all wallet ports, all service ports, daemon height every 5 minutes
+5. **Add block height delta check** — alert if no new block in 10 minutes
+6. ~~Add evidence directory to backup inventory~~ ✅ DONE (WALLET-CUSTODY.md updated)
+7. **Add incoming peer monitoring** — alert when incoming = 0
+8. **Test all backup recoveries** — actually restore from backup, don't just document
+9. **Create wallet credential backup procedure** — back up `.agent-cred-*` files
+10. **Document large report policy** — prefer file + summary/link for reports >5k words
 
 ---
 
