@@ -1,0 +1,23 @@
+[build]
+  publish = "public"
+  command = ""
+
+[[redirects]]
+  from = "/list-ai"
+  to = "/list-ai.html"
+  status = 200
+
+[[redirects]]
+  from = "/build-ai"
+  to = "/build-ai.html"
+  status = 200
+
+[[redirects]]
+  from = "/mission-control"
+  to = "/mission-control.html"
+  status = 200
+
+[[redirects]]
+  from = "/payments"
+  to = "/payments.html"
+  status = 200
