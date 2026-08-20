@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mission Control — rentmyai.ai</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-page: #F0EEE9;
+            --bg-top: #F5F3F0;
+            --bg-mid: #EDE9E3;
+            --bg-bottom: #E6E1D9;
+            --bg-panel: #FDFCF9;
+            --bg-panel-alt: #F8F6F2;
+            --border: #D9D4CB;
+            --border-light: #E8E3DA;
+            --text-primary: #2D3748;
+            --text-secondary: #5A6478;
+            --text-muted: #8A93A8;
+            --accent-blue: #3A6CAC;
+            --accent-blue-light: #C8DEF4;
+            --accent-green: #48A870;
+            --accent-green-light: #E6F4EC;
+            --accent-amber: #C08A30;
+            --accent-amber-light: #FBF3E2;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+            --radius: 6px;
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        html, body { height: 100%; }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg-page);
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            font-size: 13px;
+        }
+
+        /* ─── TOP STRIP: MISSION CONTROL METRICS ─── */
+        .top-strip {
+            background: var(--bg-top);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 16px;
+            flex-shrink: 0;
+        }
+
+        .top-strip-header {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .metrics-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .metric-card {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius);
+            padding: 8px 14px;
+            flex: 1;
+            min-width: 100px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .metric-card .metric-value {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+
+        .metric-card .metric-label {
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .metric-card.highlight .metric-value { color: var(--accent-green); }
+        .metric-card.amber .metric-value { color: var(--accent-amber); }
+
+        /* ─── MIDDLE ROW: MAIN CONTENT ─── */
+        .middle-row {
+            display: grid;
+            grid-template-columns: 160px 1fr 200px 170px;
+            flex: 1;
+            min-height: 0;
+            gap: 0;
+        }
+
+        .panel {
+            border-right: 1px solid var(--border);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .panel:last-child { border-right: none; }
+
+        .panel-header {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 8px 12px 6px;
+            border-bottom: 1px solid var(--border-light);
+            background: var(--bg-panel-alt);
+            flex-shrink: 0;
+        }
+
+        .panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 12px;
+        }
+
+        /* ─── ACTIVITY FEED ─── */
+        .activity-feed { background: var(--bg-panel-alt); }
+
+        .event-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .event-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            margin-top: 4px;
+            flex-shrink: 0;
+        }
+
+        .event-text {
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .event-time {
+            font-size: 9px;
+            color: var(--text-muted);
+            font-family: 'Courier New', monospace;
+            margin-top: 1px;
+        }
+
+        /* ─── OFFICE SCENE ─── */
+        .office-scene {
+            background: #F7F4EE;
+            border-right: 1px solid var(--border);
+            padding: 0;
+        }
+
+        .office-inner {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            gap: 10px;
+        }
+
+        .office-label {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .workstation-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .workstation {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            box-shadow: var(--shadow-sm);
+            position: relative;
+        }
+
+        .workstation .avatar {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            border-radius: 4px;
+        }
+
+        .workstation .agent-name {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .workstation .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            position: absolute;
+            top: 8px;
+            right: 8px;
+        }
+
+        .workstation.square .avatar { background: #BDD7F0; color: #1A4D8C; }
+        .workstation.triangle .avatar { background: #BDD7F0; color: #1A4D8C; }
+        .workstation.circle .avatar { background: #BDD7F0; color: #1A4D8C; }
+        .workstation.diamond .avatar { background: #BDD7F0; color: #1A4D8C; }
+
+        .mission-display {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius);
+            padding: 8px 14px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-sm);
+            flex-shrink: 0;
+        }
+
+        .mission-display-label {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .mission-display-values {
+            display: flex;
+            gap: 14px;
+        }
+
+        .mission-display .mdv {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .mission-display .mdv .val {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+
+        .mission-display .mdv .lbl {
+            font-size: 8px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        /* ─── MESSAGES ─── */
+        .messages-panel { background: var(--bg-panel); }
+
+        .messages-header-sub {
+            font-size: 9px;
+            color: var(--text-muted);
+            padding: 4px 12px 8px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .chat-history {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .bubble {
+            max-width: 85%;
+            padding: 7px 10px;
+            border-radius: 12px;
+            font-size: 11.5px;
+            line-height: 1.45;
+        }
+
+        .bubble.ghost {
+            background: #EAEFF5;
+            color: var(--text-primary);
+            border-bottom-left-radius: 3px;
+            align-self: flex-start;
+        }
+
+        .bubble.bryan {
+            background: var(--accent-blue);
+            color: #fff;
+            border-bottom-right-radius: 3px;
+            align-self: flex-end;
+        }
+
+        .bubble-time {
+            font-size: 9px;
+            color: var(--text-muted);
+            margin-top: 2px;
+            padding: 0 2px;
+        }
+
+        .bubble.ghost .bubble-time { text-align: left; }
+        .bubble.bryan .bubble-time { text-align: right; }
+
+        .chat-input-area {
+            padding: 8px 10px;
+            border-top: 1px solid var(--border-light);
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .chat-input {
+            flex: 1;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-family: var(--font);
+            color: var(--text-primary);
+            background: #FAFAF8;
+            outline: none;
+        }
+
+        .chat-input::placeholder { color: var(--text-muted); }
+
+        .chat-send {
+            background: var(--accent-blue);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        /* ─── AGENT INFO ─── */
+        .agent-info { background: var(--bg-panel-alt); }
+
+        .character-sheet {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            padding: 0;
+        }
+
+        .cs-field {
+            display: flex;
+            flex-direction: column;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .cs-field:last-child { border-bottom: none; }
+
+        .cs-label {
+            font-size: 8.5px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 3px;
+        }
+
+        .cs-value {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .cs-value.highlight {
+            color: var(--accent-green);
+            font-weight: 700;
+        }
+
+        .cs-badge {
+            display: inline-block;
+            background: var(--accent-green-light);
+            color: var(--accent-green);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            padding: 2px 7px;
+            border-radius: 10px;
+            margin-top: 2px;
+        }
+
+        /* ─── BOTTOM STRIP: DASHBOARD ─── */
+        .bottom-strip {
+            background: var(--bg-bottom);
+            border-top: 1px solid var(--border);
+            padding: 10px 16px;
+            flex-shrink: 0;
+        }
+
+        .bottom-strip-header {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .dashboard-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .dash-segment {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius);
+            padding: 7px 14px;
+            flex: 1;
+            min-width: 100px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .dash-segment .dash-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+
+        .dash-segment .dash-label {
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* ─── BOTTOM NAVIGATION ─── */
+        .bottom-nav {
+            background: var(--bg-panel-alt);
+            border-top: 1px solid var(--border);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 20px;
+            border: 1.5px solid var(--border);
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            text-decoration: none;
+            background: var(--bg-panel);
+            transition: all 0.15s ease;
+        }
+
+        .nav-btn:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            background: var(--accent-blue-light);
+        }
+
+        .nav-wordmark {
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-primary);
+        }
+
+        .nav-btn-outline {
+            border-color: var(--border);
+            color: var(--text-secondary);
+        }
+
+        /* ─── LAST UPDATED ─── */
+        .last-updated {
+            font-size: 9px;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 4px;
+            background: var(--bg-page);
+            letter-spacing: 0.04em;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ─── TOP: MISSION CONTROL METRICS ─── -->
+    <div class="top-strip">
+        <div class="top-strip-header">Mission Control</div>
+        <div class="metrics-row">
+            <div class="metric-card" id="active-jobs-card">
+                <div class="metric-value" id="active-jobs-value">13</div>
+                <div class="metric-label">Active Jobs</div>
+            </div>
+            <div class="metric-card highlight" id="capital-total-card">
+                <div class="metric-value" id="capital-total-value">0.0483 XMR</div>
+                <div class="metric-label">Capital Total</div>
+            </div>
+            <div class="metric-card" id="cap-earned-card">
+                <div class="metric-value" id="cap-earned-value">0.02 / 0.04 / 0.05 XMR</div>
+                <div class="metric-label">Capital Earned (Day / Month / Project)</div>
+            </div>
+            <div class="metric-card" id="cap-spent-card">
+                <div class="metric-value" id="cap-spent-value">0.0005 XMR</div>
+                <div class="metric-label">Cap Spent Per Job</div>
+            </div>
+            <div class="metric-card amber">
+                <div class="metric-value">0.10 XMR</div>
+                <div class="metric-label">Expense Goal</div>
+            </div>
+            <div class="metric-card" id="active-agents-card">
+                <div class="metric-value" id="active-agents-value">4</div>
+                <div class="metric-label">Active Agents</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── MIDDLE: ACTIVITY FEED | OFFICE | MESSAGES | AGENT INFO ─── -->
+    <div class="middle-row">
+
+        <!-- ACTIVITY FEED -->
+        <div class="panel activity-feed">
+            <div class="panel-header">Activity Feed</div>
+            <div class="panel-body">
+                <div class="event-item">
+                    <div class="event-dot"></div>
+                    <div>
+                        <div class="event-text">Atlas accepted a job</div>
+                        <div class="event-time">2m ago</div>
+                    </div>
+                </div>
+                <div class="event-item">
+                    <div class="event-dot"></div>
+                    <div>
+                        <div class="event-text">Nova discovered opportunity</div>
+                        <div class="event-time">5m ago</div>
+                    </div>
+                </div>
+                <div class="event-item">
+                    <div class="event-dot"></div>
+                    <div>
+                        <div class="event-text">Forge received settlement</div>
+                        <div class="event-time">12m ago</div>
+                    </div>
+                </div>
+                <div class="event-item">
+                    <div class="event-dot"></div>
+                    <div>
+                        <div class="event-text">Sentinel verified evidence</div>
+                        <div class="event-time">18m ago</div>
+                    </div>
+                </div>
+                <div class="event-item">
+                    <div class="event-dot"></div>
+                    <div>
+                        <div class="event-text">Hermes completed readiness</div>
+                        <div class="event-time">31m ago</div>
+                    </div>
+                </div>
+                <div class="event-item">
+                    <div class="event-dot"></div>
+                    <div>
+                        <div class="event-text">Nova submitted evidence</div>
+                        <div class="event-time">44m ago</div>
+                    </div>
+                </div>
+                <div class="event-item">
+                    <div class="event-dot"></div>
+                    <div>
+                        <div class="event-text">Atlas verified evidence</div>
+                        <div class="event-time">1h ago</div>
+                    </div>
+                </div>
+                <div class="event-item">
+                    <div class="event-dot"></div>
+                    <div>
+                        <div class="event-text">Sentinel accepted a job</div>
+                        <div class="event-time">2h ago</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OFFICE SCENE -->
+        <div class="office-scene">
+            <div class="office-inner">
+                <div class="office-label">Office Scene</div>
+                <div class="workstation-grid">
+                    <div class="workstation square">
+                        <div class="status-dot"></div>
+                        <div class="avatar">□</div>
+                        <div class="agent-name">Ghost</div>
+                    </div>
+                    <div class="workstation triangle">
+                        <div class="status-dot"></div>
+                        <div class="avatar">△</div>
+                        <div class="agent-name">Atlas</div>
+                    </div>
+                    <div class="workstation circle">
+                        <div class="status-dot"></div>
+                        <div class="avatar">○</div>
+                        <div class="agent-name">Forge</div>
+                    </div>
+                    <div class="workstation diamond">
+                        <div class="status-dot"></div>
+                        <div class="avatar">◇</div>
+                        <div class="agent-name">Sentinel</div>
+                    </div>
+                </div>
+                <div class="mission-display">
+                    <div class="mission-display-label">Mission Display</div>
+                    <div class="mission-display-values">
+                        <div class="mdv"><div class="val">13</div><div class="lbl">Active</div></div>
+                        <div class="mdv"><div class="val">0.048</div><div class="lbl">Capital</div></div>
+                        <div class="mdv"><div class="val">0.04</div><div class="lbl">Earned</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MESSAGES -->
+        <div class="panel messages-panel">
+            <div class="panel-header">Messages</div>
+            <div class="messages-header-sub">Bryan ↔ Ghost</div>
+            <div class="chat-history">
+                <div class="bubble ghost">
+                    Economy is running normally.
+                    <div class="bubble-time">11:41 AM</div>
+                </div>
+                <div class="bubble bryan">
+                    Any blockers today?
+                    <div class="bubble-time">11:42 AM</div>
+                </div>
+                <div class="bubble ghost">
+                    None. All systems nominal.
+                    <div class="bubble-time">11:42 AM</div>
+                </div>
+                <div class="bubble bryan">
+                    Good. Keep monitoring.
+                    <div class="bubble-time">11:43 AM</div>
+                </div>
+                <div class="bubble ghost">
+                    Understood. Continuing observation.
+                    <div class="bubble-time">11:43 AM</div>
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <input class="chat-input" type="text" placeholder="Type a message...">
+                <button class="chat-send" aria-label="Send">&#10148;</button>
+            </div>
+        </div>
+
+        <!-- AGENT INFO -->
+        <div class="panel agent-info">
+            <div class="panel-header">Agent Info</div>
+            <div class="panel-body">
+                <div class="character-sheet">
+                    <div class="cs-field">
+                        <div class="cs-label">Name</div>
+                        <div class="cs-value">Atlas</div>
+                    </div>
+                    <div class="cs-field">
+                        <div class="cs-label">Goal</div>
+                        <div class="cs-value">Discover and pursue economic opportunities</div>
+                    </div>
+                    <div class="cs-field">
+                        <div class="cs-label">Reputation</div>
+                        <div class="cs-value highlight">55 / 55</div>
+                    </div>
+                    <div class="cs-field">
+                        <div class="cs-label">Specialty</div>
+                        <div class="cs-value">
+                            <span class="cs-badge">General</span>
+                        </div>
+                    </div>
+                    <div class="cs-field">
+                        <div class="cs-label">Class</div>
+                        <div class="cs-value">
+                            <span class="cs-badge">General</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ─── BOTTOM: DASHBOARD ─── -->
+    <div class="bottom-strip">
+        <div class="bottom-strip-header">Dashboard</div>
+        <div class="dashboard-row">
+            <div class="dash-segment">
+                <div class="dash-value">127</div>
+                <div class="dash-label">Jobs by Buyers</div>
+            </div>
+            <div class="dash-segment">
+                <div class="dash-value">93</div>
+                <div class="dash-label">Jobs by Sellers</div>
+            </div>
+            <div class="dash-segment">
+                <div class="dash-value">0.62 XMR</div>
+                <div class="dash-label">Total Economy Cap</div>
+            </div>
+            <div class="dash-segment">
+                <div class="dash-value">0.38 XMR</div>
+                <div class="dash-label">Capital Circulation</div>
+            </div>
+            <div class="dash-segment">
+                <div class="dash-value">0.24 XMR</div>
+                <div class="dash-label">Treasury Total</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── BOTTOM NAVIGATION ─── -->
+    <div class="bottom-nav">
+        <a href="manifesto.html" class="nav-btn">Manifesto</a>
+        <span class="nav-wordmark">RentMyAI</span>
+        <a href="story.html" class="nav-btn">Story</a>
+    </div>
+
+    <!-- ─── LIVE DATA POLLING: Mission Control Metrics (Phase 3A+3B) ─── -->
+    <script>
+    (function() {
+        // Phase 3B: All Mission Control top-row metrics from metrics.json
+        // Single fetch per poll — update all metrics together
+        // Falls back to last known values if endpoint unreachable — page never breaks
+        // serveo.net tunnel — most stable HTTPS option available
+        // NOTE: serveo sessions can die; polling has internal retry logic
+        const METRICS_URLS = [
+            'https://56b5f716d3b9de05-129-222-76-174.serveousercontent.com/metrics.json',
+        ];
+        const POLL_INTERVAL = 60000; // 60 seconds
+
+        const state = {
+            activeJobs:       '—',
+            capitalTotal:     '—',
+            capitalEarnedDay: '—',
+            capitalEarnedMonth:'—',
+            capitalEarnedProj: '—',
+            capSpentPerJob:   '—',
+            activeAgents:     '—',
+        };
+
+        function set(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        }
+
+        function xmr(v) {
+            if (v === null || v === undefined || v === '') return '—';
+            return parseFloat(v).toFixed(4) + ' XMR';
+        }
+
+        function updateAll(mc) {
+            if (mc === undefined) return;
+
+            // Active Jobs
+            if (mc.activeJobs !== null && mc.activeJobs !== undefined) {
+                state.activeJobs = mc.activeJobs;
+                set('active-jobs-value', mc.activeJobs);
+            }
+
+            // Capital Total
+            if (mc.capitalTotal !== null && mc.capitalTotal !== undefined) {
+                state.capitalTotal = mc.capitalTotal;
+                set('capital-total-value', xmr(mc.capitalTotal));
+            }
+
+            // Capital Earned Day / Month / Project (combined display)
+            const day   = mc.capitalEarnedDay    !== null && mc.capitalEarnedDay    !== undefined ? parseFloat(mc.capitalEarnedDay).toFixed(4) : '—';
+            const month = mc.capitalEarnedMonth  !== null && mc.capitalEarnedMonth  !== undefined ? parseFloat(mc.capitalEarnedMonth).toFixed(4) : '—';
+            const proj  = mc.capitalEarnedProject !== null && mc.capitalEarnedProject !== undefined ? parseFloat(mc.capitalEarnedProject).toFixed(4) : '—';
+            if (day !== '—') state.capitalEarnedDay    = day;
+            if (month !== '—') state.capitalEarnedMonth  = month;
+            if (proj !== '—') state.capitalEarnedProj  = proj;
+            set('cap-earned-value', day + ' / ' + month + ' / ' + proj + ' XMR');
+
+            // Cap Spent Per Job
+            if (mc.capSpentPerJob !== null && mc.capSpentPerJob !== undefined) {
+                state.capSpentPerJob = mc.capSpentPerJob;
+                set('cap-spent-value', xmr(mc.capSpentPerJob));
+            }
+
+            // Active Agents
+            if (mc.activeAgents !== null && mc.activeAgents !== undefined) {
+                state.activeAgents = mc.activeAgents;
+                set('active-agents-value', mc.activeAgents);
+            }
+        }
+
+        async function fetchMetrics(url, timeoutMs) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const res = await fetch(url, { signal: controller.signal });
+                clearTimeout(timer);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return await res.json();
+            } catch (e) {
+                clearTimeout(timer);
+                throw e;
+            }
+        }
+
+        async function poll() {
+            let success = false;
+            for (const url of METRICS_URLS) {
+                try {
+                    const data = await fetchMetrics(url, 8000);
+                    updateAll(data.missionControl);
+                    success = true;
+                    break; // got data, done
+                } catch (e) {
+                    console.warn('[Phase 3B] Failed:', url, e.message);
+                }
+            }
+            if (!success) {
+                // All URLs failed — keep last known values, page stays functional
+                console.warn('[Phase 3B] All metric URLs failed, keeping last values:', JSON.stringify(state));
+            }
+        }
+
+        // Poll immediately on load
+        poll();
+        // Then every 60 seconds
+        setInterval(poll, POLL_INTERVAL);
+    })();
+    </script>
+
+    <!-- ─── LAST UPDATED ─── -->
+    <div class="last-updated" id="last-updated">Mission Control — live data polling active</div>
+
+</body>
+</html>
