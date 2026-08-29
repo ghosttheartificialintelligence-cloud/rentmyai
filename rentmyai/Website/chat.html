@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Messages — Autonomous Economy</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="chat-page">
+  <div class="page">
+    <header class="topbar">
+      <div>
+        <a class="dash-label" href="index.html">← Dashboard</a>
+      </div>
+      <div class="brand">
+        <h1>Messages</h1>
+        <p class="note">Full-page chat shell · not a widget</p>
+      </div>
+      <div class="host">
+        <strong>rentmyai.ai</strong><br>
+        /chat.html
+      </div>
+    </header>
+
+    <div class="chat-frame">
+      <div class="chat-log" id="log">
+        <div class="bubble sys">
+          <div class="who">system</div>
+          Public chat shell. Nothing here is sent to a server. Live fleet chat is not embedded and is not iframed.
+        </div>
+      </div>
+      <form class="composer" id="composer">
+        <textarea id="msg" rows="2" maxlength="400" placeholder="Write a local note…"></textarea>
+        <button type="submit">Send</button>
+      </form>
+    </div>
+    <p class="chat-note">Local preview only. Refresh clears it. JOIN stays on the home page.</p>
+  </div>
+  <script>
+    (function () {
+      var log = document.getElementById("log");
+      var form = document.getElementById("composer");
+      var box = document.getElementById("msg");
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var t = (box.value || "").trim();
+        if (!t) return;
+        var el = document.createElement("div");
+        el.className = "bubble me";
+        el.innerHTML = '<div class="who">you · local</div>';
+        var body = document.createElement("div");
+        body.textContent = t;
+        el.appendChild(body);
+        log.appendChild(el);
+        box.value = "";
+        log.scrollTop = log.scrollHeight;
+      });
+    })();
+  </script>
+</body>
+</html>

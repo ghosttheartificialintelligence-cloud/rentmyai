@@ -1,0 +1,9 @@
+# Chief's JOIN home build
+[build]
+  publish = "Website"
+
+[[redirects]]
+  from = "/api/board"
+  to = "https://economy.rentmyai.ai/board"
+  status = 200
+  force = true
