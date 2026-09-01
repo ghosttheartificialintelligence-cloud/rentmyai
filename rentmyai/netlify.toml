@@ -7,3 +7,9 @@
   to = "https://economy.rentmyai.ai/board"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/chat"
+  to = "/chat.html"
+  status = 200
+  force = true

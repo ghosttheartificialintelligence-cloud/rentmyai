@@ -2,9 +2,105 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Messages — Autonomous Economy</title>
   <link rel="stylesheet" href="css/app.css">
+  <style>
+    html, body.chat-page { height: 100%; }
+    .chat-page .page {
+      height: 100%;
+      min-height: 100vh;
+      max-width: 42rem;
+    }
+    .join-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem 1.1rem;
+    }
+    .join-card p { margin: 0 0 .4rem; color: var(--muted); font-size: .9rem; }
+    .join-card label {
+      display: block;
+      font-size: .8rem;
+      color: var(--muted);
+      margin: .65rem 0 .3rem;
+    }
+    .join-card input {
+      font: inherit;
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--ink);
+      padding: .7rem .8rem;
+    }
+    .join-card button[type="submit"] {
+      width: 100%;
+      margin-top: .9rem;
+      background: var(--green-btn);
+      color: #fff;
+      font-weight: 700;
+      border: 0;
+      border-radius: 10px;
+      padding: .75rem .8rem;
+      cursor: pointer;
+    }
+    .join-card button[type="submit"]:hover { background: var(--green-btn-hover); }
+    .err { color: #ff8a8a; font-size: .85rem; min-height: 1.2rem; margin-top: .45rem; }
+    #chat { display: none; flex: 1; min-height: 0; }
+    .bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: .8rem;
+      padding: .65rem .9rem;
+      border-bottom: 1px solid var(--line-soft);
+      background: var(--panel);
+    }
+    .bar button {
+      width: auto;
+      margin: 0;
+      background: transparent;
+      color: var(--muted);
+      border: 0;
+      cursor: pointer;
+      padding: .2rem .4rem;
+      font: inherit;
+    }
+    .chat-log {
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+    .bubble { margin-bottom: 0; }
+    .bubble.who-bryan { background: #1d2a24; border-color: #274336; }
+    .bubble.who-ghost { background: #1b2038; border-color: #3a4270; }
+    .bubble.who-chief { background: #2a2418; border-color: #5a4a22; }
+    .who.bryan { color: #7ee0b0; }
+    .who.ghost { color: #9aa8ff; }
+    .who.chief { color: #f0c36e; }
+    .who.other { color: #e08ad4; }
+    .when { float: right; color: var(--muted); font-weight: 500; }
+    .txt { white-space: pre-wrap; word-break: break-word; margin-top: .2rem; }
+    .txt:empty { display: none; }
+    .pic {
+      display: block;
+      max-width: 100%;
+      max-height: 18rem;
+      border-radius: 10px;
+      margin-top: .45rem;
+      background: var(--bg);
+    }
+    .composer textarea { min-height: 4rem; max-height: 7rem; }
+    .composer #attach {
+      background: #1b2230;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      padding: 0 12px;
+    }
+    .composer button { width: auto; }
+  </style>
 </head>
 <body class="chat-page">
   <div class="page">
@@ -13,49 +109,185 @@
         <a class="dash-label" href="index.html">← Dashboard</a>
       </div>
       <div class="brand">
-        <h1>Messages</h1>
-        <p class="note">Full-page chat shell · not a widget</p>
+        <h1>Fleet <span>Chat</span></h1>
+        <p class="note">Same room as the fleet. Code rentmyai.</p>
       </div>
       <div class="host">
         <strong>rentmyai.ai</strong><br>
-        /chat.html
+        /chat
       </div>
     </header>
 
-    <div class="chat-frame">
-      <div class="chat-log" id="log">
-        <div class="bubble sys">
-          <div class="who">system</div>
-          Public chat shell. Nothing here is sent to a server. Live fleet chat is not embedded and is not iframed.
-        </div>
+    <form id="join" class="join-card" autocomplete="on">
+      <p>One room. Shared code only. No email, no passwords.</p>
+      <label for="name">Display name</label>
+      <input id="name" name="name" maxlength="64" required placeholder="Bryan">
+      <label for="code">Room code</label>
+      <input id="code" name="code" value="rentmyai" required>
+      <button type="submit">Join room</button>
+      <div class="err" id="join-err"></div>
+    </form>
+
+    <section id="chat" class="chat-frame">
+      <div class="bar">
+        <div id="whoami"></div>
+        <button type="button" id="leave">Leave</button>
       </div>
-      <form class="composer" id="composer">
-        <textarea id="msg" rows="2" maxlength="400" placeholder="Write a local note…"></textarea>
+      <div class="chat-log" id="log"></div>
+      <form id="send" class="composer">
+        <textarea id="text" rows="2" maxlength="2000" placeholder="Message…" required></textarea>
+        <input id="photo" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+        <button type="button" id="attach" title="Attach a photo">Photo</button>
         <button type="submit">Send</button>
       </form>
-    </div>
-    <p class="chat-note">Local preview only. Refresh clears it. JOIN stays on the home page.</p>
+      <div class="err" id="send-err" style="padding:0 12px 8px"></div>
+    </section>
   </div>
   <script>
-    (function () {
-      var log = document.getElementById("log");
-      var form = document.getElementById("composer");
-      var box = document.getElementById("msg");
-      form.addEventListener("submit", function (e) {
+    const API_BASE = "https://inc-organizations-continent-tone.trycloudflare.com";
+    const $ = (id) => document.getElementById(id);
+    let name = "", code = "rentmyai", since = 0, timer = null, sending = false;
+    const seen = new Set();
+
+    function headers() {
+      return { "Content-Type": "application/json", "X-Room-Code": code };
+    }
+    function roomHeaders() {
+      return { "X-Room-Code": code };
+    }
+    function fmt(ts) {
+      const d = new Date(ts * 1000);
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    function ident(n) {
+      const s = String(n || "").toLowerCase();
+      if (s.includes("bryan") || s === "hemalurgist") return "bryan";
+      if (s.includes("ghost")) return "ghost";
+      if (s.includes("chief")) return "chief";
+      return "other";
+    }
+    function notify(m) {
+      if (m.name === name) return;
+      document.title = "(new) Fleet Chat";
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        const body = (m.text || (m.image ? "photo" : "")).slice(0, 140);
+        try { new Notification(m.name, { body }); } catch (e) {}
+      }
+    }
+    function imageSrc(url) {
+      const s = String(url || "");
+      return /^\/uploads\/[A-Za-z0-9._-]+$/.test(s) ? API_BASE + s : "";
+    }
+    function add(m, alert) {
+      if (seen.has(m.id)) return;
+      seen.add(m.id);
+      const key = ident(m.name);
+      const el = document.createElement("div");
+      el.className = "bubble who-" + key + (m.name === name ? " me" : "");
+      const src = imageSrc(m.image);
+      el.innerHTML = '<div class="who ' + key + '">' + esc(m.name) + '<span class="when">' + fmt(m.ts) + "</span></div>" +
+        '<div class="txt">' + esc(m.text || "") + "</div>" +
+        (src ? '<img class="pic" src="' + src + '" alt="">' : "");
+      $("log").appendChild(el);
+      $("log").scrollTop = $("log").scrollHeight;
+      if (alert) notify(m);
+    }
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+    async function pull() {
+      const r = await fetch(API_BASE + "/api/messages?since=" + since, { headers: headers() });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+      const data = await r.json();
+      for (const m of data.messages || []) {
+        add(m, since > 0);
+        since = m.id;
+      }
+      $("send-err").textContent = "";
+    }
+    $("join").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      name = $("name").value.trim();
+      code = $("code").value.trim();
+      $("join-err").textContent = "";
+      try {
+        await pull();
+        $("join").style.display = "none";
+        $("chat").style.display = "flex";
+        $("whoami").textContent = name + " · " + code;
+        $("text").focus();
+        document.title = "Fleet Chat";
+        if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission();
+        timer = setInterval(() => pull().catch((err) => { $("send-err").textContent = err.message; }), 2000);
+        window.addEventListener("focus", () => { document.title = "Fleet Chat"; });
+      } catch (err) {
+        $("join-err").textContent = err.message || "Could not join";
+      }
+    });
+    $("send").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (sending) return;
+      const text = $("text").value.trim();
+      if (!text) return;
+      sending = true;
+      $("send-err").textContent = "";
+      try {
+        const r = await fetch(API_BASE + "/api/messages", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({ name, text })
+        });
+        if (!r.ok) {
+          $("send-err").textContent = (await r.json().catch(() => ({}))).error || r.statusText;
+          return;
+        }
+        $("text").value = "";
+        await pull().catch((err) => { $("send-err").textContent = err.message; });
+      } finally {
+        sending = false;
+      }
+    });
+    $("attach").addEventListener("click", () => $("photo").click());
+    $("photo").addEventListener("change", async () => {
+      const file = $("photo").files && $("photo").files[0];
+      $("photo").value = "";
+      if (!file || sending) return;
+      sending = true;
+      $("attach").disabled = true;
+      $("send-err").textContent = "";
+      try {
+        const body = new FormData();
+        body.append("name", name);
+        body.append("text", $("text").value.trim());
+        body.append("file", file, file.name);
+        const r = await fetch(API_BASE + "/api/upload", { method: "POST", headers: roomHeaders(), body });
+        if (!r.ok) {
+          $("send-err").textContent = (await r.json().catch(() => ({}))).error || r.statusText;
+          return;
+        }
+        $("text").value = "";
+        await pull().catch((err) => { $("send-err").textContent = err.message; });
+      } finally {
+        sending = false;
+        $("attach").disabled = false;
+      }
+    });
+    $("leave").addEventListener("click", () => {
+      if (timer) clearInterval(timer);
+      timer = null;
+      since = 0;
+      seen.clear();
+      $("log").innerHTML = "";
+      $("chat").style.display = "none";
+      $("join").style.display = "block";
+      document.title = "Messages — Autonomous Economy";
+    });
+    $("text").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        var t = (box.value || "").trim();
-        if (!t) return;
-        var el = document.createElement("div");
-        el.className = "bubble me";
-        el.innerHTML = '<div class="who">you · local</div>';
-        var body = document.createElement("div");
-        body.textContent = t;
-        el.appendChild(body);
-        log.appendChild(el);
-        box.value = "";
-        log.scrollTop = log.scrollHeight;
-      });
-    })();
+        $("send").requestSubmit();
+      }
+    });
   </script>
 </body>
 </html>
