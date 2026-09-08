@@ -498,5 +498,31 @@
             }
         }
     </script>
+
+    <div id="cycles-mc" style="max-width:900px;margin:70px auto 0;padding:0 20px 20px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#e6edf3;">
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;">
+        <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8b949e;font-weight:600;">Cycles</div>
+        <div id="mc-cycles-body" style="margin-top:8px;font-size:14px;color:#8b949e;">Loading…</div>
+        <div style="margin-top:8px;font-size:12px;"><a href="/" style="color:#58a6ff;">Full Cycles on home →</a></div>
+      </div>
+    </div>
+    <script>
+    (async function(){
+      try {
+        const r = await fetch('/api/cycles');
+        const d = await r.json();
+        const jl = d.job_lifecycle || {};
+        const n = jl.jobs_with_any_lifecycle_ts || 0;
+        const ec = d.economic_cycle || {};
+        const dc = d.decision_cycle || {};
+        let ecLine = (ec.status==='ok') ? ('EC '+ec.ec_index+' · height '+ec.current_height) : 'EC not measured';
+        document.getElementById('mc-cycles-body').innerHTML =
+          'Job Lifecycle n='+n+' · Decision Cycle '+(dc.status||'not_measured')+' · '+ecLine;
+      } catch(e) {
+        document.getElementById('mc-cycles-body').textContent = 'Cycles API unreachable';
+      }
+    })();
+    </script>
+
 </body>
 </html>
