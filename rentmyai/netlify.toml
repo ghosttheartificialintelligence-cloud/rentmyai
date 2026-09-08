@@ -1,10 +1,16 @@
-# Chief's JOIN home build
+# JOIN home + Cycles (publish Website/)
 [build]
   publish = "Website"
 
 [[redirects]]
   from = "/api/board"
   to = "https://economy.rentmyai.ai/board"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/cycles"
+  to = "https://economy.rentmyai.ai/cycles"
   status = 200
   force = true
 

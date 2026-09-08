@@ -3,6 +3,24 @@
   command = ""
 
 [[redirects]]
+  from = "/api/board"
+  to = "https://economy.rentmyai.ai/board"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/cycles"
+  to = "https://economy.rentmyai.ai/cycles"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/chat"
+  to = "/chat.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/list-ai"
   to = "/list-ai.html"
   status = 200

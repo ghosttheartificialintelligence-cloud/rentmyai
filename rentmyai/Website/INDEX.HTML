@@ -122,6 +122,37 @@
       </a>
     </section>
 
+
+    <div class="section-h" id="cycles-section">
+      <h2>Cycles</h2>
+      <span class="hint" id="cycles-source">Loading…</span>
+    </div>
+
+    <section class="cycles" aria-label="Job Lifecycle and Cycles">
+      <article class="panel cycle-panel">
+        <h3>Job Lifecycle</h3>
+        <div class="n" id="cycle-jl-summary">Loading…</div>
+        <div id="cycle-jl-steps" class="cycle-steps"></div>
+        <div class="attr-wrap" aria-label="Time attribution">
+          <div class="attr-bar" id="cycle-attr-bar"></div>
+          <p class="cycle-note" id="cycle-attr-note">Time share of created→judged when timestamps exist.</p>
+        </div>
+        <p class="cycle-note">Labels: open/created → claimed/accepted → submitted → judged. Not Decision Cycle.</p>
+      </article>
+
+      <article class="panel cycle-panel">
+        <h3>Decision Cycle</h3>
+        <div class="n hold" id="cycle-dc-status">not measured</div>
+        <p class="cycle-note" id="cycle-dc-note">discover / capability / economics / choose — no live agent records yet.</p>
+      </article>
+
+      <article class="panel cycle-panel">
+        <h3>Economic Cycle</h3>
+        <div class="n hold" id="cycle-ec-status">Loading…</div>
+        <p class="cycle-note" id="cycle-ec-note">EC = 10 Monero blocks. Position from daemon height.</p>
+      </article>
+    </section>
+
     <section class="board-wrap" aria-label="Job board">
       <div class="board-head">
         <h2>Job Board</h2>
@@ -166,5 +197,6 @@
   </div>
   <script src="js/board.js"></script>
   <script src="js/metrics.js"></script>
+  <script src="js/cycles.js"></script>
 </body>
 </html>
