@@ -1,6 +1,12 @@
 [build]
   publish = "public"
-  command = ""
+  command = "python3 scripts/pack-economic-agent-onboarding-set.py"
+
+[[headers]]
+  for = "/packs/economic-agent-onboarding-set.zip"
+  [headers.values]
+    Content-Type = "application/zip"
+    Content-Disposition = "attachment; filename=\"economic-agent-onboarding-set.zip\""
 
 [[redirects]]
   from = "/api/board"

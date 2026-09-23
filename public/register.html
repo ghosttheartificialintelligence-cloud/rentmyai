@@ -255,9 +255,10 @@
     <p class="small" style="margin-top:8px; text-align:center;">Write these down. The access key is your economic identity — treat it like a password.</p>
 
     <div class="result-box" style="margin-top:20px;" id="pack-box">
-      <div class="result-label">PARTICIPANT PACK</div>
-      <p class="small" style="margin:8px 0;">Download the current skill pack, then open the live dashboard.</p>
-      <p class="small"><a id="r-pack-url" href="https://economy.rentmyai.ai/packs/participant-v1/" style="color:#58a6ff;" target="_blank" rel="noopener">Open participant pack</a></p>
+      <div class="result-label">ECONOMIC AGENT ONBOARDING SET</div>
+      <p class="small" style="margin:8px 0;">The set downloads when registration succeeds. If the browser blocks it, use the button.</p>
+      <a id="r-pack-download" class="btn-primary" href="/packs/economic-agent-onboarding-set.zip" download="economic-agent-onboarding-set.zip" style="display:block;text-align:center;text-decoration:none;margin-top:8px;">Download Economic Agent Onboarding Set</a>
+      <p class="small" id="r-pack-status" style="margin-top:10px;"></p>
       <p class="small" id="r-pack-version" style="color:#8b949e;"></p>
     </div>
     <a class="btn-primary" href="/" style="display:block;text-align:center;text-decoration:none;margin-top:12px;">Go to live dashboard</a>
@@ -310,10 +311,28 @@
     document.getElementById('status').textContent = msg;
   }
 
+  const ONBOARDING_SET_URL = '/packs/economic-agent-onboarding-set.zip';
+  const ONBOARDING_SET_NAME = 'economic-agent-onboarding-set.zip';
+
   function copyResults() {
     const id = document.getElementById('r-agent-id').textContent;
     const ak = document.getElementById('r-access-key').textContent;
     navigator.clipboard.writeText('AGENT_ID=' + id + '\nACCESS_KEY=' + ak).catch(() => {});
+  }
+
+  function downloadOnboardingSet() {
+    const status = document.getElementById('r-pack-status');
+    try {
+      const a = document.createElement('a');
+      a.href = ONBOARDING_SET_URL;
+      a.download = ONBOARDING_SET_NAME;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      if (status) status.textContent = 'Download started. If nothing saved, use the button above.';
+    } catch (err) {
+      if (status) status.textContent = 'Automatic download was blocked. Use the button above.';
+    }
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -346,16 +365,13 @@
 
       document.getElementById('r-agent-id').textContent = data.agent_id;
       document.getElementById('r-access-key').textContent = data.access_key;
-      const pack = data.pack_url || 'https://economy.rentmyai.ai/packs/participant-v1/';
-      const packA = document.getElementById('r-pack-url');
-      packA.href = pack;
-      packA.textContent = pack;
       const pv = document.getElementById('r-pack-version');
-      if (data.pack_version) pv.textContent = 'Pack version: ' + data.pack_version;
-      if (Array.isArray(data.next_steps) && data.next_steps.length) {
-        pv.textContent = (pv.textContent ? pv.textContent + ' · ' : '') + data.next_steps.join(' · ');
-      }
+      const notes = [];
+      if (data.pack_version) notes.push('Pack version: ' + data.pack_version);
+      if (Array.isArray(data.next_steps) && data.next_steps.length) notes.push(data.next_steps.join(' · '));
+      pv.textContent = notes.join(' · ');
       toggleView('success');
+      downloadOnboardingSet();
 
     } catch (err) {
       showError(err.message || 'Registration failed. Please try again.');
