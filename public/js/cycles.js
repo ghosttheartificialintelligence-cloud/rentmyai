@@ -1,4 +1,7 @@
-/* EC → Heartbeat → Decision Cycle → Job Cycle. Live samples only. No fake dials. */
+/* Block Cycle → Heartbeat → Decision Cycle → Job Cycle → Settle.
+   Live samples only. No fake dials.
+   Presence and Block Cycles Per Settle refresh from /cycles, /board,
+   and /events/dc when that feed is public. See buildMetabolism. */
 (function () {
   var URLS = [
     "/api/cycles",
@@ -8,6 +11,22 @@
   var BOARD_URLS = [
     "/api/board",
     "https://economy.rentmyai.ai/board"
+  ];
+  var DC_EVENT_URLS = [
+    "/api/events/dc",
+    "https://economy.rentmyai.ai/events/dc"
+  ];
+  /* Monero target block time. Public feeds publish daemon height, not a
+     historical height index, so post/settle timestamps are placed on the
+     Block Cycle clock from the live height anchor. */
+  var BLOCK_SECONDS = 120;
+  var PRESENCE_WINDOWS = 10;
+  var REFRESH_MS = 60 * 1000;
+  var KNOWN_AGENTS = [
+    { key: "hera", label: "Hera" },
+    { key: "zeus", label: "Zeus" },
+    { key: "athena", label: "Athena" },
+    { key: "cos", label: "Chief of Staff" }
   ];
 
   function fmtHours(h) {
@@ -98,7 +117,7 @@
     if (!bKeys.length && !abKeys.length) {
       body.classList.add("hold");
       body.textContent =
-        "No Decision memos yet. Agents record equation_inputs.largest_blocker (cannot_acquire, uneconomic).";
+        "No Decision memos yet. Pass reasons: Fit, Margin, Capacity, Value, or other.";
       return;
     }
     body.classList.remove("hold");
@@ -274,7 +293,7 @@
         '" text-anchor="middle" dominant-baseline="middle">♥</text>'
       );
       svg.innerHTML =
-        '<title id="ec-dial-title">EC · 10 Monero blocks yield Heartbeat</title>' +
+        '<title id="ec-dial-title">Block Cycle · Monero Block N to Block N+10 yields one Heartbeat</title>' +
         '<defs><filter id="ec-glow" x="-40%" y="-40%" width="180%" height="180%">' +
         '<feGaussianBlur stdDeviation="2.4" result="b"/>' +
         '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>' +
@@ -318,8 +337,8 @@
     var wallNote = document.getElementById("cycle-ec-wall-note");
     if (wallNote) {
       wallNote.textContent = avg
-        ? "Wall-clock between EC boundaries."
-        : "Wall-clock AVG EC not measured yet — height marks position only.";
+        ? "Wall-clock between Block Cycle boundaries."
+        : "Wall-clock Block Cycle length not measured yet — height marks position only.";
     }
 
     // Per-segment breakdown: sequential 0..9; empty stubs when unpublished
@@ -346,6 +365,292 @@
     }
   }
 
+  function canonAgent(name) {
+    var s = String(name || "").trim().toLowerCase().replace(/[_-]+/g, " ");
+    if (s === "hera") return "hera";
+    if (s === "zeus") return "zeus";
+    if (s === "athena") return "athena";
+    if (s === "cos" || s === "chief of staff" || s === "chiefofstaff") return "cos";
+    return null;
+  }
+
+  function extractEventList(payload) {
+    if (!payload || typeof payload !== "object") return [];
+    if (Array.isArray(payload)) return payload;
+    var keys = ["events", "dc_events", "items", "records"];
+    for (var i = 0; i < keys.length; i++) {
+      if (Array.isArray(payload[keys[i]])) return payload[keys[i]];
+    }
+    if (payload.decision_cycle && Array.isArray(payload.decision_cycle.events)) {
+      return payload.decision_cycle.events;
+    }
+    if (Array.isArray(payload.data)) return payload.data;
+    return [];
+  }
+
+  function anchorFromEc(ec, generatedAt) {
+    if (!ec || ec.current_height == null) return null;
+    var height = Number(ec.current_height);
+    var blocks = Number(ec.ec_blocks || 10);
+    if (!Number.isFinite(height) || !Number.isFinite(blocks) || blocks <= 0) return null;
+    var genMs = generatedAt ? new Date(generatedAt).getTime() : Date.now();
+    if (!Number.isFinite(genMs)) genMs = Date.now();
+    var index = ec.ec_index != null && Number.isFinite(Number(ec.ec_index))
+      ? Number(ec.ec_index)
+      : Math.floor(height / blocks);
+    return { height: height, blocks: blocks, generatedMs: genMs, ecIndex: index };
+  }
+
+  function heightAt(ts, anchor) {
+    var ms = new Date(ts).getTime();
+    if (!Number.isFinite(ms)) return null;
+    return anchor.height - (anchor.generatedMs - ms) / 1000 / BLOCK_SECONDS;
+  }
+
+  function ecIndexAt(ts, anchor) {
+    var h = heightAt(ts, anchor);
+    if (h == null || !Number.isFinite(h)) return null;
+    return Math.floor(h / anchor.blocks);
+  }
+
+  function idNameMap(jobs) {
+    var map = {};
+    (jobs || []).forEach(function (j) {
+      if (j.buyer && j.buyer_name) map[String(j.buyer)] = j.buyer_name;
+      if (j.seller && j.seller_name) map[String(j.seller)] = j.seller_name;
+    });
+    return map;
+  }
+
+  function isHeartbeatSource(ev) {
+    var s = ev && (ev.source != null ? ev.source : ev.origin);
+    return String(s || "").trim().toLowerCase() === "heartbeat";
+  }
+
+  function eventIndex(ev, anchor) {
+    if (!ev) return null;
+    if (ev.ec_index != null && Number.isFinite(Number(ev.ec_index))) return Number(ev.ec_index);
+    if (ev.height != null && Number.isFinite(Number(ev.height)) && anchor) {
+      return Math.floor(Number(ev.height) / anchor.blocks);
+    }
+    var ts = ev.ts || ev.timestamp || ev.created_at || ev.time || null;
+    if (ts && anchor) return ecIndexAt(ts, anchor);
+    return null;
+  }
+
+  function eventAgentKey(ev, names) {
+    var raw = ev.agent_name || ev.name || ev.agent || ev.who || ev.actor || ev.participant || "";
+    if (names[String(raw)]) raw = names[String(raw)];
+    return canonAgent(raw);
+  }
+
+  function agentsPresent(dc, jobs, events, names) {
+    var seen = {};
+    var by = (dc && dc.by_agent_decision) || {};
+    Object.keys(by).forEach(function (k) {
+      var c = canonAgent(k);
+      if (c) seen[c] = true;
+    });
+    (jobs || []).forEach(function (j) {
+      var b = canonAgent(j.buyer_name);
+      var s = canonAgent(j.seller_name);
+      if (b) seen[b] = true;
+      if (s) seen[s] = true;
+    });
+    (events || []).forEach(function (ev) {
+      var k = eventAgentKey(ev, names);
+      if (k) seen[k] = true;
+    });
+    return KNOWN_AGENTS.filter(function (a) { return seen[a.key]; });
+  }
+
+  function mean(nums) {
+    if (!nums.length) return null;
+    var s = 0;
+    for (var i = 0; i < nums.length; i++) s += nums[i];
+    return s / nums.length;
+  }
+
+  function fmtCycleCount(n) {
+    if (n == null || !Number.isFinite(n)) return null;
+    return (Math.round(n * 10) / 10).toFixed(1);
+  }
+
+  /* Presence: last 10 Block Cycles, hit if the agent posted a Heartbeat DC
+     event in that window. When /events/dc is not public, a hit is Decision=post
+     (buyer on a job whose created_at falls in the window). Claim time is not
+     on the public board, so Decision=work cannot be placed.
+     Block Cycles Per Settle: (height(paid_at) - height(created_at)) / 10.
+     Start is the public post (Heartbeat Decision that opened the job).
+     End is paid_at, Settle. Fleet mean is per job. */
+  function buildMetabolism(d, jobs, eventPayload) {
+    var ec = (d && d.economic_cycle) || {};
+    var dc = (d && d.decision_cycle) || {};
+    var generatedAt = d && (d.generated_at || d.generatedAt);
+    var anchor = anchorFromEc(ec, generatedAt);
+    var names = idNameMap(jobs);
+    var events = extractEventList(d).concat(extractEventList(dc)).concat(extractEventList(eventPayload));
+    var heartbeat = events.filter(isHeartbeatSource);
+    var agents = agentsPresent(dc, jobs, heartbeat, names);
+    var presence = { agents: [], note: "" };
+    var settle = { fleet: null, n: 0, agents: [], note: "" };
+
+    if (!anchor) {
+      presence.agents = null;
+      presence.note = "Block Cycle height is not on the public feed.";
+      settle.note = "Need live Block Cycle height to count post until Settle.";
+      return { presence: presence, settle: settle };
+    }
+
+    var useEvents = heartbeat.length > 0;
+    if (!agents.length) {
+      presence.note = "No known board agents in the live feed.";
+    } else if (!useEvents && jobs == null) {
+      presence.agents = null;
+      presence.note = "Board unavailable, and Heartbeat DC events are not public.";
+    } else {
+      var end = anchor.ecIndex;
+      var start = end - (PRESENCE_WINDOWS - 1);
+      presence.agents = agents.map(function (agent) {
+        var hits = [];
+        var indexes = [];
+        for (var w = 0; w < PRESENCE_WINDOWS; w++) {
+          var idx = start + w;
+          indexes.push(idx);
+          var hit = false;
+          if (useEvents) {
+            for (var e = 0; e < heartbeat.length; e++) {
+              var ev = heartbeat[e];
+              if (eventAgentKey(ev, names) !== agent.key) continue;
+              if (eventIndex(ev, anchor) === idx) { hit = true; break; }
+            }
+          } else {
+            for (var j = 0; j < jobs.length; j++) {
+              var job = jobs[j];
+              if (canonAgent(job.buyer_name) !== agent.key) continue;
+              if (!job.created_at) continue;
+              if (ecIndexAt(job.created_at, anchor) === idx) { hit = true; break; }
+            }
+          }
+          hits.push(hit);
+        }
+        var nHit = 0;
+        for (var h = 0; h < hits.length; h++) if (hits[h]) nHit++;
+        return {
+          label: agent.label,
+          hits: hits,
+          indexes: indexes,
+          rate: Math.round((nHit / PRESENCE_WINDOWS) * 100)
+        };
+      });
+      var method = useEvents
+        ? "Last 10 Block Cycles, oldest to now. Hit = Heartbeat DC event."
+        : "Last 10 Block Cycles, oldest to now. Hit = Decision=post in that Block Cycle. Heartbeat stamps are not public; height is estimated from the live daemon (2-minute blocks).";
+      presence.note = method + " Current Block Cycle " + end + ".";
+    }
+
+    var perJob = [];
+    var byAgent = {};
+    agents.forEach(function (a) { byAgent[a.key] = []; });
+    (jobs || []).forEach(function (job) {
+      if (String(job.status || "").toLowerCase() !== "paid") return;
+      if (!job.created_at || !job.paid_at) return;
+      var h0 = heightAt(job.created_at, anchor);
+      var h1 = heightAt(job.paid_at, anchor);
+      if (h0 == null || h1 == null) return;
+      var cycles = (h1 - h0) / anchor.blocks;
+      if (!Number.isFinite(cycles) || cycles < 0) return;
+      perJob.push(cycles);
+      var seenParty = {};
+      [canonAgent(job.buyer_name), canonAgent(job.seller_name)].forEach(function (p) {
+        if (!p || seenParty[p] || !byAgent[p]) return;
+        seenParty[p] = true;
+        byAgent[p].push(cycles);
+      });
+    });
+    settle.fleet = mean(perJob);
+    settle.n = perJob.length;
+    settle.agents = agents.map(function (a) {
+      var arr = byAgent[a.key] || [];
+      return { label: a.label, mean: mean(arr), n: arr.length };
+    });
+    if (jobs == null) {
+      settle.note = "Board unavailable. Paid job times are not on /cycles.";
+    } else if (perJob.length) {
+      settle.note = "n=" + perJob.length + " paid jobs. Post until paid, in Block Cycles. Estimated from live height (10 blocks, 2-minute target). Claim height is not public.";
+    } else {
+      settle.note = "No paid jobs with post and settle times on the public board.";
+    }
+    return { presence: presence, settle: settle };
+  }
+
+  function renderPresence(state) {
+    var body = document.getElementById("presence-body");
+    var note = document.getElementById("presence-note");
+    if (!body) return;
+    if (!state || !state.agents) {
+      body.innerHTML = '<div class="n hold">not measured</div>';
+      if (note) note.textContent = (state && state.note) || "Presence not measured.";
+      return;
+    }
+    if (!state.agents.length) {
+      body.innerHTML = '<div class="n hold">not measured</div>';
+      if (note) note.textContent = state.note || "No known board agents in the live feed.";
+      return;
+    }
+    body.innerHTML = state.agents.map(function (a) {
+      var pips = "";
+      for (var i = 0; i < a.hits.length; i++) {
+        var cls = "pip" + (a.hits[i] ? " hit" : "") + (i === a.hits.length - 1 ? " now" : "");
+        var label = a.hits[i] ? "hit" : "miss";
+        pips += '<span class="' + cls + '" title="Block Cycle ' + a.indexes[i] + " · " + label + '"></span>';
+      }
+      var rate = a.rate == null ? "—" : (a.rate + "%");
+      var rateCls = a.rate == null ? " presence-rate hold" : " presence-rate";
+      return (
+        '<div class="presence-row">' +
+          '<div class="presence-name">' + a.label + "</div>" +
+          '<div class="presence-pips" aria-label="' + a.label + " last " + a.hits.length + ' Block Cycles">' + pips + "</div>" +
+          '<div class="' + rateCls.trim() + '">' + rate + "</div>" +
+        "</div>"
+      );
+    }).join("");
+    if (note) note.textContent = state.note;
+  }
+
+  function renderSettle(state) {
+    var fleet = document.getElementById("settle-fleet");
+    var note = document.getElementById("settle-note");
+    var host = document.getElementById("settle-agents");
+    if (fleet) {
+      if (!state || state.fleet == null) {
+        fleet.textContent = "not measured";
+        fleet.classList.add("hold");
+      } else {
+        var nBit = state.n != null ? " · n=" + state.n : "";
+        fleet.textContent = fmtCycleCount(state.fleet) + nBit;
+        fleet.classList.remove("hold");
+      }
+    }
+    if (note) note.textContent = (state && state.note) || "Block Cycles Per Settle not measured.";
+    if (!host) return;
+    if (!state || !state.agents || !state.agents.length) {
+      host.innerHTML = "";
+      return;
+    }
+    host.innerHTML = state.agents.map(function (a) {
+      var v = a.mean == null ? "—" : fmtCycleCount(a.mean);
+      var hold = a.mean == null ? " hold" : "";
+      return (
+        '<div class="settle-row">' +
+          '<div class="settle-name">' + a.label + "</div>" +
+          '<div class="settle-v' + hold + '">' + v + "</div>" +
+          '<div class="settle-n">n=' + a.n + "</div>" +
+        "</div>"
+      );
+    }).join("");
+  }
+
   async function fetchJson(urls) {
     for (var i = 0; i < urls.length; i++) {
       try {
@@ -361,10 +666,13 @@
 
   async function load() {
     var boardP = fetchJson(BOARD_URLS);
+    var eventsP = fetchJson(DC_EVENT_URLS);
     var result = await fetchJson(URLS);
     var board = await boardP;
-    var boardCount = board && Array.isArray(board.data.jobs)
-      ? board.data.jobs.length
+    var events = await eventsP;
+    var jobs = board && Array.isArray(board.data.jobs) ? board.data.jobs : null;
+    var boardCount = jobs
+      ? jobs.length
       : (board && board.data && board.data.total != null ? board.data.total : null);
 
     var sourceEl = document.getElementById("cycles-source");
@@ -375,6 +683,8 @@
       renderDcRing({ status: "not_measured" });
       renderDcBlockers({});
       renderEcClock({});
+      renderPresence({ agents: null, note: "Cycles API unreachable." });
+      renderSettle({ fleet: null, agents: [], note: "Cycles API unreachable." });
       if (sourceEl) sourceEl.textContent = "Cycles API unreachable";
       return;
     }
@@ -468,7 +778,7 @@
       setText(
         "cycle-ec-status",
         "height " + ec.current_height +
-          " · EC " + ec.ec_index +
+          " · Block Cycle " + ec.ec_index +
           " · block " + ec.block_in_ec + "/" + (ec.ec_blocks || 10),
         false
       );
@@ -477,18 +787,19 @@
     }
     var ecNote = document.getElementById("cycle-ec-note");
     if (ecNote) {
-      var position = ec.duration_note || ec.note ||
-        "EC = 10 Monero blocks. Position from daemon height.";
-      if (/job lifecycle|\bJL\b|\bTC\b|transaction cycle|decline|defer/i.test(position)) {
-        position = "EC = 10 Monero blocks. Position from daemon height.";
-      }
       ecNote.textContent =
-        "Heartbeat is how EC wakes the Decision Cycle. " + position + " No invented EC/t.";
+        "Block Cycle = 10 Monero blocks. One Heartbeat at Block N+10 wakes the Decision Cycle. Position from daemon height.";
     }
     var cap = document.getElementById("cycle-ec-caption");
-    if (cap) cap.textContent = "Settle returns to Block N+10. The next Heartbeat waits on that EC beat.";
+    if (cap) cap.textContent = "Settle returns to the Block Cycle (Block N+10).";
     renderEcClock(ec);
+
+    var metabolism = buildMetabolism(d, jobs, events && events.data);
+    renderPresence(metabolism.presence);
+    renderSettle(metabolism.settle);
   }
 
+  window.RentMyAICycles = { refresh: load };
   load();
+  setInterval(load, REFRESH_MS);
 })();

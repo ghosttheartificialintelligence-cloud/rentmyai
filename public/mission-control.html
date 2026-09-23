@@ -515,7 +515,7 @@
         const n = jl.jobs_with_any_lifecycle_ts || 0;
         const ec = d.economic_cycle || {};
         const dc = d.decision_cycle || {};
-        let ecLine = (ec.status==='ok') ? ('EC '+ec.ec_index+' · height '+ec.current_height) : 'EC not measured';
+        let ecLine = (ec.status==='ok') ? ('Block Cycle '+ec.ec_index+' · height '+ec.current_height) : 'Block Cycle not measured';
         document.getElementById('mc-cycles-body').innerHTML =
           'Job Lifecycle n='+n+' · Decision Cycle '+(dc.status||'not_measured')+' · '+ecLine;
       } catch(e) {

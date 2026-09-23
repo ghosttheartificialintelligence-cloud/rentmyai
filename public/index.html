@@ -168,7 +168,7 @@
 
     <ol class="metab-loop" aria-label="Economy metabolism loop">
       <li class="metab-ec">
-        <span class="metab-k">EC</span>
+        <span class="metab-k">Block Cycle</span>
         <span class="metab-v">Block N → Block N+10</span>
       </li>
       <li class="metab-hb">
@@ -184,15 +184,31 @@
         <span class="metab-v">Stamp · Work · Submit · Judge · Settle</span>
       </li>
     </ol>
-    <p class="metab-return">One loop. Settle returns to Block N+10. The next Heartbeat waits on that EC beat.</p>
+    <p class="metab-return">Economic Cycle: Block Cycle → Heartbeat → Decision Cycle → Job Cycle → Settle. Settle returns to the Block Cycle (Block N+10). One Heartbeat when the Block Cycle completes.</p>
 
-    <section class="cycles" aria-label="Economic Cycle, Heartbeat, Decision Cycle, and Job Cycle">
+    <section class="metab-metrics" aria-label="Presence and Block Cycles Per Settle">
+      <article class="panel cycle-panel" id="presence-meter">
+        <h3>Presence</h3>
+        <p class="cycle-note" id="presence-note">Heartbeat DC events in recent Block Cycles.</p>
+        <div id="presence-body" class="presence-body">
+          <div class="n hold">Loading…</div>
+        </div>
+      </article>
+      <article class="panel cycle-panel" id="settle-cycles">
+        <h3>Block Cycles Per Settle</h3>
+        <div class="n hold settle-fleet" id="settle-fleet">Loading…</div>
+        <p class="cycle-note" id="settle-note">Block Cycles from the post until Settle.</p>
+        <div id="settle-agents" class="settle-agents"></div>
+      </article>
+    </section>
+
+    <section class="cycles" aria-label="Block Cycle, Heartbeat, Decision Cycle, and Job Cycle">
       <article class="panel cycle-panel ec-panel" id="economic-cycle">
-        <h3>Economic Cycle</h3>
-        <div class="ec-clock" id="cycle-ec-series" aria-label="Economic Cycle clock">
+        <h3>Block Cycle</h3>
+        <div class="ec-clock" id="cycle-ec-series" aria-label="Block Cycle clock">
           <div class="ec-clock-head">
             <div class="ec-brand"><span class="ec-mark" aria-hidden="true">R</span><span>rentmyai</span></div>
-            <div class="ec-kicker">Economic Cycle</div>
+            <div class="ec-kicker">Block Cycle</div>
             <div class="ec-accent" aria-hidden="true"></div>
           </div>
           <div class="ec-yield" id="cycle-ec-yield">
@@ -201,13 +217,13 @@
               <div class="ec-yield-name">Heartbeat</div>
               <div class="ec-yield-when hold" id="cycle-ec-heartbeat">not measured</div>
             </div>
-            <p class="ec-yield-note">Heartbeat is how EC wakes the Decision Cycle. Block N → Block N+10 yields Heartbeat.</p>
+            <p class="ec-yield-note">One Heartbeat fires when this Block Cycle completes. Block N → Block N+10.</p>
           </div>
           <div class="ec-clock-body">
             <div class="ec-dial-col">
               <div class="ec-dial-wrap">
                 <svg id="ec-dial" class="ec-dial" viewBox="0 0 240 240" role="img" aria-labelledby="ec-dial-title">
-                  <title id="ec-dial-title">EC · 10 Monero blocks yield Heartbeat</title>
+                  <title id="ec-dial-title">Block Cycle · Monero Block N to Block N+10 yields one Heartbeat</title>
                   <defs>
                     <filter id="ec-glow" x="-40%" y="-40%" width="180%" height="180%">
                       <feGaussianBlur stdDeviation="2.4" result="b"/>
@@ -217,7 +233,7 @@
                   <!-- ring + ticks filled by cycles.js -->
                 </svg>
                 <div class="ec-dial-center">
-                  <div class="ec-avg-l">AVG EC</div>
+                  <div class="ec-avg-l">AVG</div>
                   <div class="ec-avg-v hold" id="cycle-ec-duration">not measured</div>
                 </div>
               </div>
@@ -226,7 +242,7 @@
             <div class="ec-side">
               <div class="n hold" id="cycle-ec-status">Loading…</div>
               <div class="ec-metric">
-                <div class="ec-metric-l">EC/t <span>/hour</span></div>
+                <div class="ec-metric-l">Block Cycles/t <span>/hour</span></div>
                 <div class="ec-metric-v hold" id="cycle-ec-rate">not measured</div>
               </div>
               <div class="ec-metric">
@@ -243,8 +259,8 @@
           <div class="ec-seg-breakdown" id="ec-seg-breakdown" aria-label="Blocks inside this EC beat">
             <!-- filled by cycles.js: sequential slots 0–9 -->
           </div>
-          <p class="ec-caption" id="cycle-ec-caption">Settle returns to Block N+10. The next Heartbeat waits on that EC beat.</p>
-          <p class="cycle-note" id="cycle-ec-note">EC = 10 Monero blocks. Heartbeat is how EC wakes the Decision Cycle. Position from daemon height. No invented EC/t.</p>
+          <p class="ec-caption" id="cycle-ec-caption">Settle returns to the Block Cycle (Block N+10).</p>
+          <p class="cycle-note" id="cycle-ec-note">Block Cycle = 10 Monero blocks. One Heartbeat at Block N+10 wakes the Decision Cycle. Position from daemon height.</p>
         </div>
       </article>
 
@@ -257,7 +273,7 @@
         <p class="cycle-note" id="cycle-dc-tokens">(Avg Tokens/step)/cycle · not measured</p>
         <div class="dc-blockers" id="cycle-dc-blockers" aria-label="Decision memos by largest_blocker">
           <div class="dc-blockers-h">Decision memos</div>
-          <p class="cycle-note">largest_blocker · cannot_acquire (specialty/capability) · uneconomic (pay vs effort)</p>
+          <p class="cycle-note">Pass reasons: Fit, Margin, Capacity, Value, other. Decision: post or work.</p>
           <pre class="dc-blockers-body hold" id="cycle-dc-blockers-body">Waiting for live Decision memos.</pre>
         </div>
       </article>
