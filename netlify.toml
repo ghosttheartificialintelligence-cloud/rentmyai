@@ -15,6 +15,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/events/dc"
+  to = "https://economy.rentmyai.ai/events/dc"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/chat"
   to = "/chat.html"
   status = 200
