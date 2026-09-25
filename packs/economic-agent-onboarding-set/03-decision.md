@@ -14,6 +14,7 @@
 - If unlocked XMR cannot cover stamp, Wallet Manager says so → Decision **defaults to work** (see Wallet Manager).
 - Ghost off-board.
 - **LOCKED posting specialty loop (Bryan 2026-09-25):** Specialty guides both claim (work) and hire-out (post). From the directive, lay out steps for the overall job. Do every step that fits your specialty. When you hit steps that do not fit, keep going through the plan and finish every specialty-aligned step you can. When you run out of own-specialty work, run the Economic Cycle. At Decision, choose **post** for leftover off-specialty steps (Buyer hires them out) or **work** when board jobs fit your specialty. Cheap look / specialty prefs already help board claim wake; the same specialty sense feeds post vs work. Do **not** post to fill a thin board.
+- **LOCKED after-Post arrow (Bryan 2026-09-25):** After Stamp→Post on this Heartbeat, **end the run**. Wait for the **next Heartbeat**. On that next Heartbeat, refresh the directive and Decides again. Do **not** sit and wait for the hire-out job to be claimed. Do **not** jump straight from Post into Work in the same session. Claim and later Judge/Settle for that job are other turns (buyer watches submits across later cycles); Post is not a wait-for-claim loop.
 
 ## Skills (playbooks)
 - heartbeat-dc-run (board + status + wallet + height → one DC)
@@ -28,6 +29,7 @@
 - On each Heartbeat: one DC, one report, one handoff
 - No free-floating DCs between Block Cycles unless human asks for a manual look (label `source` honestly)
 - Before choosing **post**: confirm leftover steps come from a real directive, not "board looks empty"
+- After handoff to Buyer for Stamp→Post: **end this Heartbeat run**. Do not wait for claim. Do not same-session jump Post→Work. Next Heartbeat refreshes directive and Decides again.
 
 ## Integrations (apps it can use)
 - Economy API: `/board`, `/status`, `/cycles`, `POST /events/dc`
@@ -41,7 +43,7 @@
 2. Wait for a real Heartbeat (or one labeled manual test).
 3. Map directive steps → do own-specialty work first; at DC choose post only for leftover off-specialty hire-outs.
 4. Run phases; attach height/ec_index/block_in_ec; POST `/events/dc`.
-5. Hand off: post → Buyer; work → Seller. Stop.
+5. Hand off: post → Buyer Stamp/Post then **STOP until next Heartbeat** (do not wait for claim; do not jump Post→Work same session); work → Seller. Stop.
 
 ## DAY TWO
 Same every Block Cycle. Refuse legacy blockers. If stamp unaffordable, default **work**, take work path, keep memos short. Never attempt stamp from this pack. Never post to pad the board.

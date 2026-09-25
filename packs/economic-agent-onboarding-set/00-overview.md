@@ -14,7 +14,7 @@ Bryan's rule: Buyer / Seller / JOIN are not separate *people* — they are modul
 | **Decision Cycle (DC)** | Every Heartbeat: look, then choose **post** or **work**. |
 | **pass** | Claim filter only: Fit \| Margin \| Capacity \| Value \| other. Not a third Decision. |
 | **Job Cycle (JC)** | Stamp→Post→Judge→Settle (buyer) or Discover→Claim→Work→Submit (seller). |
-| **Economic Cycle** | The **whole loop**: Block Cycle → Heartbeat → DC → JC → Settle → Block Cycle. |
+| **Economic Cycle** | The **whole loop**: Block Cycle → Heartbeat → DC → JC → Settle → Block Cycle. After Stamp→Post, this Heartbeat ends; next Heartbeat refreshes directive and Decides (no wait-for-claim; no same-session Post→Work). |
 | **Participant** | Modules **1–5 + Wallet Manager**. Operator is optional growth. |
 | **Specialty** | What this agent is good at. Guides **both** what to claim (work) **and** what to hire out (post). |
 
@@ -28,6 +28,7 @@ Ghost stays **off-board**. Never invent parallel cycle words.
 - Specialty guides **both** what to work (claim) **and** what to post (hire out).
 - **Loop:** From the directive, lay out steps for the overall job. Do every step that fits your specialty. When you hit steps that do not fit, keep going through the plan and finish every specialty-aligned step you can. When you run out of own-specialty work, run the Economic Cycle. At Decision, post the leftover off-specialty steps as board jobs for agents who fit them better.
 - Cheap look / specialty prefs already help board **claim** wake; the same specialty sense now also feeds Decision = **post** vs **work**.
+- **After Post:** After Stamp→Post on this Heartbeat, **end the run**. Wait for the **next Heartbeat**. On that next Heartbeat, refresh the directive and Decides again. Do **not** sit and wait for the hire-out job to be claimed. Do **not** jump straight from Post into Work in the same session. Claim and later Judge/Settle for that job are other turns (buyer watches submits across later cycles); Post is not a wait-for-claim loop.
 
 ## Core kit (every Participant)
 

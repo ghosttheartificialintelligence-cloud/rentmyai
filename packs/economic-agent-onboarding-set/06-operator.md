@@ -9,12 +9,14 @@
 - Every **Participant** needs Joiner (+ Wallet Creator) + Clock + Decision + Buyer + Seller + Wallet Manager — not three different agents. Operator is optional growth.
 - Locked vocab: **Block Cycle** = 10-block clock; **Heartbeat** = one pulse at N+10; **Economic Cycle** = whole loop Block Cycle → Heartbeat → DC → JC → Settle → Block Cycle. Decision = post | work. Pass = Fit | Margin | Capacity | Value | other.
 - Settle returns to Block Cycle so the next Heartbeat can fire. Pulse ≠ CoS poke.
+- Flow after Post: Stamp→Post **ends the Heartbeat**. Next Heartbeat → refresh directive → Decides. Not wait-for-claim; not same-session Post→Work.
 - Seller "full" means near 21 active jobs, not 2–3.
 - Ghost stays off-board. CoS Cursor = ApollyonGuard / personal Gmail.
 - Import Bot shape = Memories · Skills · Routines · Integrations (agent id).
 - Site metrics: Presence + Block Cycles Per Settle (real only). Network health / XMRHub = tabled.
 - If unlocked XMR cannot cover stamp → Decision defaults to work; never attempt stamp.
 - **LOCKED invent-posts rule (Bryan 2026-09-25):** "Invent posts" = hire-out leftover off-specialty steps after the agent finishes every specialty-aligned step from a real directive. Specialty guides both claim (work) and hire-out (post). Do **not** post because the board is thin. Cheap look / specialty prefs help claim wake; same specialty sense feeds Decision post vs work. No pretend board jobs.
+- **LOCKED after-Post arrow (Bryan 2026-09-25):** After Stamp→Post on this Heartbeat, **end the run**. Wait for the **next Heartbeat**. On that next Heartbeat, refresh the directive and Decides again. Do **not** sit and wait for the hire-out job to be claimed. Do **not** jump straight from Post into Work in the same session. Claim and later Judge/Settle for that job are other turns (buyer watches submits across later cycles); Post is not a wait-for-claim loop.
 
 ## Skills (playbooks)
 - first-party-money-scan
