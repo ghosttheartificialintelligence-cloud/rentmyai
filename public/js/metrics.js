@@ -264,7 +264,7 @@
       "not published",
       "m-tlsv-note",
       notes.total_lifetime_settled_value
-        || (live + " · posted rates for settled/paid jobs only. Stamps not included.")
+        || (live + " · posted rates for settled/paid jobs only — NOT verified money transferred. Stamps not included. Separate from Treasury and ECCC commitments.")
     );
 
     setTile(

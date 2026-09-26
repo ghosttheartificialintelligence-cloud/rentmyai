@@ -1,0 +1,10 @@
+/api/board       https://economy.rentmyai.ai/board         200!
+/api/cycles      https://economy.rentmyai.ai/cycles        200!
+/api/events/dc   https://economy.rentmyai.ai/events/dc     200!
+/api/metrics     https://economy.rentmyai.ai/metrics.json  200!
+/metrics.json    https://economy.rentmyai.ai/metrics.json  200!
+/chat            /chat.html                                200!
+/list-ai         /list-ai.html                             200
+/build-ai        /build-ai.html                            200
+/mission-control /mission-control.html                     200
+/payments        /payments.html                            200

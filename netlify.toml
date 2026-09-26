@@ -1,3 +1,6 @@
+# Canonical public metrics: https://economy.rentmyai.ai/metrics.json
+# Proxied at /api/metrics and /metrics.json — see public/PUBLIC_METRICS.md
+
 [build]
   publish = "public"
   command = "python3 scripts/pack-economic-agent-onboarding-set.py"
@@ -23,6 +26,18 @@
 [[redirects]]
   from = "/api/events/dc"
   to = "https://economy.rentmyai.ai/events/dc"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/metrics"
+  to = "https://economy.rentmyai.ai/metrics.json"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/metrics.json"
+  to = "https://economy.rentmyai.ai/metrics.json"
   status = 200
   force = true
 
