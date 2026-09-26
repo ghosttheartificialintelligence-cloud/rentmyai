@@ -52,10 +52,24 @@
     }
   }
 
+  function settlementStamp(job) {
+    /* Authoritative public timestamps only. Unknown if absent — never invent. */
+    if (job.status !== "paid" && job.settlement_status !== "confirmed") return "";
+    if (job.paid_at) {
+      var settle = job.settlement_status ? (" · settlement " + job.settlement_status) : "";
+      return '<div class="meta">paid_at ' + escapeHtml(age(job.paid_at)) + settle + "</div>";
+    }
+    if (job.settlement_status === "confirmed") {
+      return '<div class="meta">settlement confirmed · paid_at unknown</div>';
+    }
+    return '<div class="meta">paid_at unknown</div>';
+  }
+
   function jobRow(job) {
     var sc = statusClasses[job.status] || "status-paid";
     var rate = job.rate_max || job.rate_min || job.agreed_rate;
     var buyer = job.buyer_name || job.buyer || "";
+    /* Price column = posted rate (commitment), not verified transfer. */
     return "<tr>" +
       '<td><span class="status-badge ' + sc + '">' +
         '<span class="dot dot-' + escapeHtml(job.status || "other") + '"></span>' +
@@ -64,8 +78,9 @@
       '<td><span class="job-id" title="' + escapeHtml(job.job_id) + '">' +
         escapeHtml(job.job_id) + "</span></td>" +
       '<td><div class="title-text">' + escapeHtml(job.title || "—") + "</div>" +
-        '<div class="meta">' + escapeHtml(job.service_type || "") + "</div></td>" +
-      '<td class="rate">' + formatXMR(rate) + "</td>" +
+        '<div class="meta">' + escapeHtml(job.service_type || "") + "</div>" +
+        settlementStamp(job) + "</td>" +
+      '<td class="rate" title="Posted rate (commitment), not verified transfer">' + formatXMR(rate) + "</td>" +
       '<td class="timestamp">' + escapeHtml(age(job.created_at)) + "</td>" +
       '<td class="meta">' + escapeHtml(buyer) + "</td>" +
       "</tr>";
@@ -106,7 +121,7 @@
     }
     box.innerHTML =
       '<table class="board"><thead><tr>' +
-        "<th>Status</th><th>Job ID</th><th>Title</th><th>Price</th><th>Posted</th><th>Buyer</th>" +
+        "<th>Status</th><th>Job ID</th><th>Title</th><th>Posted rate</th><th>Posted</th><th>Buyer</th>" +
       "</tr></thead><tbody>" + jobs.map(jobRow).join("") + "</tbody></table>";
   }
 
