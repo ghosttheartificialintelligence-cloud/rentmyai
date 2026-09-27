@@ -142,6 +142,54 @@
     body.textContent = lines.join("\n");
   }
 
+  function renderDcPostWorkMeter(dc, n) {
+    var host = document.getElementById("dc-ring");
+    if (!host) return;
+    var mix = (dc && dc.decision_mix) || {};
+    var bd = (dc && dc.by_decision) || {};
+    var post = mix.post != null ? Number(mix.post) : Number(bd.post || 0);
+    var work = mix.work != null ? Number(mix.work) : Number(bd.work || 0);
+    if (!Number.isFinite(post)) post = 0;
+    if (!Number.isFinite(work)) work = 0;
+    var total = post + work;
+    var postPct = total ? Math.round((post / total) * 1000) / 10 : 0;
+    var workPct = total ? Math.round((work / total) * 1000) / 10 : 0;
+    var byAD = (dc && dc.by_agent_decision) || {};
+    var agentRows = Object.keys(byAD).sort().map(function (agent) {
+      var row = byAD[agent] || {};
+      var p = Number(row.post || 0) || 0;
+      var w = Number(row.work || 0) || 0;
+      var t = p + w;
+      var rp = t ? Math.round((p / t) * 100) : 0;
+      return (
+        '<div class="dc-pw-agent">' +
+        '<span class="dc-pw-agent-n">' + agent + "</span>" +
+        '<span class="dc-pw-agent-v">post ' + p + " · work " + w +
+        (t ? " · " + rp + "% post" : "") +
+        "</span></div>"
+      );
+    }).join("");
+    var bar =
+      total > 0
+        ? '<div class="dc-pw-bar" role="img" aria-label="post ' + post + ", work " + work + '">' +
+          '<span class="dc-pw-post" style="width:' + postPct + '%"></span>' +
+          '<span class="dc-pw-work" style="width:' + workPct + '%"></span>' +
+          "</div>"
+        : '<div class="dc-pw-bar dc-pw-bar-empty"></div>';
+    host.innerHTML =
+      '<div class="dc-pw">' +
+      '<div class="dc-pw-head">post vs work</div>' +
+      bar +
+      '<div class="dc-pw-counts">' +
+      '<span class="dc-pw-post-l">post <b>' + post + "</b> · " + postPct + "%</span>" +
+      '<span class="dc-pw-work-l">work <b>' + work + "</b> · " + workPct + "%</span>" +
+      "</div>" +
+      (agentRows ? '<div class="dc-pw-agents">' + agentRows + "</div>" : "") +
+      '<p class="dc-pw-note">n=' + n +
+      " Heartbeat DC events. Phase wall-clock timers not logged yet — meter uses Decision=post|work from /cycles.</p>" +
+      "</div>";
+  }
+
   function renderDcRing(dc) {
     var host = document.getElementById("dc-ring");
     if (!host) return;
@@ -172,11 +220,8 @@
           "</div>";
         return;
       }
-      host.innerHTML =
-        '<div class="dc-empty">' +
-        '<div class="dc-empty-ring" aria-hidden="true"></div>' +
-        "<p>n=" + n + " · phase timers not measured yet</p>" +
-        "</div>";
+      // Prefer live post/work meters from public /cycles over empty "timers" placeholder.
+      renderDcPostWorkMeter(dc, n);
       return;
     }
     var parts = phases.map(function (p, i) {
@@ -732,7 +777,11 @@
     var tokEl = document.getElementById("cycle-dc-tokens");
     if (tokEl) {
       if (tokParts.length) {
-        tokEl.textContent = "(Avg Tokens/step)/cycle · " + tokParts.join(" / ");
+        var sampleN = dc.token_samples && dc.token_samples.avg_per_step != null
+          ? dc.token_samples.avg_per_step
+          : (dc.token_samples && dc.token_samples.capability);
+        var sampleNote = sampleN != null ? " · samples=" + sampleN : "";
+        tokEl.textContent = "(Avg Tokens/step)/cycle · " + tokParts.join(" / ") + sampleNote;
         tokEl.classList.remove("hold");
       } else {
         tokEl.textContent = "(Avg Tokens/step)/cycle · not measured";
