@@ -150,127 +150,259 @@
     if (!Number.isFinite(post)) post = 0;
     if (!Number.isFinite(work)) work = 0;
     var total = post + work;
-    return {
-      post: post,
-      work: work,
-      total: total,
-      postPct: total ? Math.round((post / total) * 1000) / 10 : 0,
-      workPct: total ? Math.round((work / total) * 1000) / 10 : 0
-    };
+    var postPct = mix.post_pct != null && Number.isFinite(Number(mix.post_pct))
+      ? Number(mix.post_pct)
+      : (total ? Math.round((post / total) * 1000) / 10 : null);
+    var workPct = mix.work_pct != null && Number.isFinite(Number(mix.work_pct))
+      ? Number(mix.work_pct)
+      : (total ? Math.round((work / total) * 1000) / 10 : null);
+    return { post: post, work: work, total: total, postPct: postPct, workPct: workPct };
   }
 
-  function renderDcPostWorkBelow(dc, n) {
-    var pw = dcPostWorkCounts(dc);
+  function fmtTok(v) {
+    if (v == null || !Number.isFinite(Number(v))) return "—";
+    var n = Number(v);
+    if (n >= 1000) return Math.round(n).toLocaleString("en-US");
+    if (Math.abs(n - Math.round(n)) < 0.05) return String(Math.round(n));
+    return (Math.round(n * 10) / 10).toString();
+  }
+
+  function fmtInt(v) {
+    if (v == null || !Number.isFinite(Number(v))) return "—";
+    return Math.round(Number(v)).toLocaleString("en-US");
+  }
+
+  function polarDeg(cx, cy, r, deg) {
+    var rad = ((deg - 90) * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+
+  function describeArc(cx, cy, r, startDeg, endDeg) {
+    if (endDeg <= startDeg) endDeg += 360;
+    var large = endDeg - startDeg > 180 ? 1 : 0;
+    var s = polarDeg(cx, cy, r, startDeg);
+    var e = polarDeg(cx, cy, r, endDeg);
+    return "M " + s.x + " " + s.y + " A " + r + " " + r + " 0 " + large + " 1 " + e.x + " " + e.y;
+  }
+
+  function renderDcAgentsBelow(dc) {
     var byAD = (dc && dc.by_agent_decision) || {};
-    var agentRows = Object.keys(byAD).sort().map(function (agent) {
-      var row = byAD[agent] || {};
-      var p = Number(row.post || 0) || 0;
-      var w = Number(row.work || 0) || 0;
-      var t = p + w;
-      var rp = t ? Math.round((p / t) * 100) : 0;
-      return (
-        '<div class="dc-pw-agent">' +
-        '<span class="dc-pw-agent-n">' + agent + "</span>" +
-        '<span class="dc-pw-agent-v">post ' + p + " · work " + w +
-        (t ? " · " + rp + "% post" : "") +
-        "</span></div>"
-      );
-    }).join("");
+    var keys = Object.keys(byAD).sort();
+    if (!keys.length) return "";
     return (
-      '<div class="dc-pw">' +
-      '<div class="dc-pw-counts">' +
-      '<span class="dc-pw-post-l">post <b>' + pw.post + "</b> · " + pw.postPct + "%</span>" +
-      '<span class="dc-pw-work-l">work <b>' + pw.work + "</b> · " + pw.workPct + "%</span>" +
-      "</div>" +
-      (agentRows ? '<div class="dc-pw-agents">' + agentRows + "</div>" : "") +
-      '<p class="dc-pw-note">n=' + n +
-      " Heartbeat DC events · Decision=post|work from /cycles" +
-      (pw.total ? "" : " · no post/work samples yet") +
-      ".</p>" +
+      '<div class="dc-pw-agents">' +
+      keys.map(function (agent) {
+        var row = byAD[agent] || {};
+        var p = Number(row.post || 0) || 0;
+        var w = Number(row.work || 0) || 0;
+        var t = p + w;
+        var rp = t ? Math.round((p / t) * 100) : 0;
+        return (
+          '<div class="dc-pw-agent">' +
+          '<span class="dc-pw-agent-n">' + agent + "</span>" +
+          '<span class="dc-pw-agent-v">post ' + p + " · work " + w +
+          (t ? " · " + rp + "% post" : "") +
+          "</span></div>"
+        );
+      }).join("") +
       "</div>"
     );
   }
 
-  /* Circular ring driven by live post vs work mix (conic fill). */
-  function renderDcPostWorkRing(dc, n) {
-    var host = document.getElementById("dc-ring");
-    if (!host) return;
-    var pw = dcPostWorkCounts(dc);
-    var postDeg = pw.total ? (pw.post / pw.total) * 360 : 0;
-    var grad = pw.total
-      ? "conic-gradient(from -90deg, #58a6ff 0deg " + postDeg + "deg, #238636 " + postDeg + "deg 360deg)"
-      : "conic-gradient(from -90deg, var(--line) 0deg 360deg)";
-    var postRot = postDeg > 0 ? postDeg / 2 : 45;
-    var workRot = postDeg + (360 - postDeg) / 2;
-    if (!pw.total) {
-      postRot = 45;
-      workRot = 225;
-    }
-    var ring =
-      '<div class="dc-ring dc-ring-pw" style="background:' + grad + '" role="img" aria-label="post ' +
-      pw.post + " (" + pw.postPct + "%), work " + pw.work + " (" + pw.workPct + '%)">' +
-      '<div class="dc-seg" style="--rot:' + postRot + 'deg">' +
-      '<div class="dc-seg-label">Post</div>' +
-      '<div class="dc-seg-val">' + (pw.total ? pw.postPct + "%" : "—") + "</div>" +
-      "</div>" +
-      '<div class="dc-seg" style="--rot:' + workRot + 'deg">' +
-      '<div class="dc-seg-label">Work</div>' +
-      '<div class="dc-seg-val">' + (pw.total ? pw.workPct + "%" : "—") + "</div>" +
-      "</div>" +
-      '<div class="dc-hub">DC</div>' +
-      "</div>";
-    host.innerHTML = ring + renderDcPostWorkBelow(dc, n);
-  }
-
-  function renderDcRing(dc) {
+  /* Bryan-approved DC dial: work/post ring + day bezel + token center. Live /cycles only. */
+  function renderDcDial(dc, ec) {
     var host = document.getElementById("dc-ring");
     if (!host) return;
     var n = dcSampleN(dc);
-    var phases = (dc && dc.phases) || ["discover", "capability", "economics", "decision"];
-    var avgs = (dc && dc.phase_averages) || {};
-    // Legacy API may still key the final phase as "choose"; display as Decision either way.
-    if (avgs.choose != null && avgs.decision == null) avgs.decision = avgs.choose;
-    phases = phases.map(function (p) { return p === "choose" ? "decision" : p; });
-    // de-dupe if both choose and decision present
-    var seen = {};
-    phases = phases.filter(function (p) {
-      if (seen[p]) return false;
-      seen[p] = true;
-      return true;
-    });
-    var labels = { discover: "Discover", capability: "Capability", economics: "Economics", decision: "Decision", choose: "Decision" };
-    var hasAny = phases.some(function (p) {
-      var v = avgs && avgs[p];
-      return v != null && Number.isFinite(Number(v));
-    });
-    if (!hasAny) {
-      if (!n) {
-        host.innerHTML =
-          '<div class="dc-empty">' +
-          '<div class="dc-empty-ring" aria-hidden="true"></div>' +
-          "<p>No Decision Cycle records yet. When agents log Discover → Capability → Economics → Decision, averages appear on this ring.</p>" +
-          "</div>";
-        return;
-      }
-      // No phase timers yet — drive the circle from live post vs work.
-      renderDcPostWorkRing(dc, n);
+    if (!n) {
+      host.innerHTML =
+        '<div class="dc-empty">' +
+        '<div class="dc-empty-ring" aria-hidden="true"></div>' +
+        "<p>No Decision Cycle records yet.</p></div>";
       return;
     }
-    var parts = phases.map(function (p, i) {
-      var val = avgs[p];
-      var txt = val == null || !Number.isFinite(Number(val)) ? "—" : fmtHours(Number(val));
-      var rot = i * 90;
-      return (
-        '<div class="dc-seg" style="--rot:' + rot + 'deg">' +
-        '<div class="dc-seg-label">' + (labels[p] || p) + "</div>" +
-        '<div class="dc-seg-val">' + txt + "</div>" +
-        "</div>"
-      );
-    }).join("");
-    // Prefer phase_averages for the ring when present; keep post/work numbers below.
+
+    var pw = dcPostWorkCounts(dc);
+    var dial = (dc && dc.dial) || {};
+    var bezel = dial.bezel_ec != null && Number.isFinite(Number(dial.bezel_ec)) ? Number(dial.bezel_ec) : null;
+    var tick = dial.tick_ec != null && Number.isFinite(Number(dial.tick_ec)) ? Number(dial.tick_ec) : null;
+    var height = dial.current_height != null ? Number(dial.current_height)
+      : (ec && ec.current_height != null ? Number(ec.current_height) : null);
+    var curPos = dial.current_pos_ec != null && Number.isFinite(Number(dial.current_pos_ec))
+      ? Number(dial.current_pos_ec) : null;
+    var fires = Array.isArray(dial.fires) ? dial.fires : [];
+    var cadence = dial.cadence_ec != null && Number.isFinite(Number(dial.cadence_ec)) ? Number(dial.cadence_ec) : null;
+    var cycDay = dial.cycles_per_day_est != null && Number.isFinite(Number(dial.cycles_per_day_est))
+      ? Number(dial.cycles_per_day_est) : null;
+    var tokDay = dial.tok_per_agent_day_est != null && Number.isFinite(Number(dial.tok_per_agent_day_est))
+      ? Number(dial.tok_per_agent_day_est) : null;
+
+    var tokDecide = dc.avg_tokens_decision;
+    var tokDiscover = dc.avg_tokens_discover;
+    var tokEcon = dc.avg_tokens_economics;
+    var tokCap = dc.avg_tokens_capability;
+    var tokTotal = dc.avg_tokens_cycle;
+    if (tokTotal == null) {
+      var parts = [tokDecide, tokDiscover, tokEcon, tokCap].filter(function (v) {
+        return v != null && Number.isFinite(Number(v));
+      });
+      if (parts.length) {
+        tokTotal = parts.reduce(function (a, b) { return a + Number(b); }, 0);
+      }
+    }
+
+    var size = 280;
+    var cx = size / 2;
+    var cy = size / 2;
+    var bezelR = 128;
+    var ringR = 108;
+    var ringStroke = 22;
+    var hubR = 78;
+
+    // Ring: work (green) then post (orange), starting at top (-90deg / 12 o'clock)
+    var workPct = pw.workPct != null ? pw.workPct : 0;
+    var postPct = pw.postPct != null ? pw.postPct : 0;
+    var workDeg = pw.total ? (workPct / 100) * 360 : 0;
+    var postDeg = pw.total ? (postPct / 100) * 360 : 0;
+    var ringPaths = "";
+    if (!pw.total) {
+      ringPaths =
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + ringR +
+        '" fill="none" stroke="#30363d" stroke-width="' + ringStroke + '"/>';
+    } else if (workDeg >= 359.5) {
+      ringPaths =
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + ringR +
+        '" fill="none" stroke="#3fb950" stroke-width="' + ringStroke + '"/>';
+    } else if (postDeg >= 359.5) {
+      ringPaths =
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + ringR +
+        '" fill="none" stroke="#f0883e" stroke-width="' + ringStroke + '"/>';
+    } else {
+      if (workDeg > 0.5) {
+        ringPaths +=
+          '<path class="dc-dial-work" d="' + describeArc(cx, cy, ringR, 0, workDeg) +
+          '" fill="none" stroke="#3fb950" stroke-width="' + ringStroke +
+          '" stroke-linecap="butt"/>';
+      }
+      if (postDeg > 0.5) {
+        ringPaths +=
+          '<path class="dc-dial-post" d="' + describeArc(cx, cy, ringR, workDeg, workDeg + postDeg) +
+          '" fill="none" stroke="#f0883e" stroke-width="' + ringStroke +
+          '" stroke-linecap="butt"/>';
+      }
+    }
+
+    // Bezel + ticks
+    var ticks = "";
+    if (bezel && tick && tick > 0) {
+      for (var t = 0; t < bezel; t += tick) {
+        var ang = (t / bezel) * 360;
+        var outer = polarDeg(cx, cy, bezelR + 4, ang);
+        var inner = polarDeg(cx, cy, bezelR - 6, ang);
+        ticks +=
+          '<line class="dc-dial-tick" x1="' + inner.x + '" y1="' + inner.y +
+          '" x2="' + outer.x + '" y2="' + outer.y + '"/>';
+      }
+    }
+
+    // Purple fire dots
+    var fireDots = "";
+    fires.forEach(function (f) {
+      var pos = f && f.pos_ec != null ? Number(f.pos_ec) : null;
+      if (pos == null || !bezel || bezel <= 0) return;
+      var fang = (pos / bezel) * 360;
+      var fp = polarDeg(cx, cy, bezelR, fang);
+      fireDots +=
+        '<circle class="dc-dial-fire" cx="' + fp.x + '" cy="' + fp.y + '" r="3.5"/>';
+    });
+
+    // Current block hollow orange
+    var curMark = "";
+    if (curPos != null && bezel && bezel > 0) {
+      var cang = (curPos / bezel) * 360;
+      var cp = polarDeg(cx, cy, bezelR, cang);
+      curMark =
+        '<circle class="dc-dial-current" cx="' + cp.x + '" cy="' + cp.y +
+        '" r="5.5" fill="none" stroke="#f0883e" stroke-width="2"/>';
+    }
+
+    var svg =
+      '<svg class="dc-dial-svg" viewBox="0 0 ' + size + " " + size +
+      '" width="100%" role="img" aria-label="Decision Cycle dial">' +
+      '<circle class="dc-dial-bezel" cx="' + cx + '" cy="' + cy + '" r="' + bezelR +
+      '" fill="none" stroke="#3a424c" stroke-width="1.5"/>' +
+      ticks +
+      ringPaths +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="' + hubR +
+      '" fill="#0d1117" stroke="#21262d" stroke-width="1"/>' +
+      fireDots +
+      curMark +
+      // Center labels
+      '<text class="dc-dial-total" x="' + cx + '" y="' + (cy - 28) +
+      '" text-anchor="middle">' + fmtTok(tokTotal) + "</text>" +
+      '<text class="dc-dial-total-sub" x="' + cx + '" y="' + (cy - 12) +
+      '" text-anchor="middle">avg tok / cycle</text>' +
+      '<text class="dc-dial-phase" x="' + (cx - 36) + '" y="' + (cy + 10) +
+      '" text-anchor="middle">Decide</text>' +
+      '<text class="dc-dial-phase-v" x="' + (cx - 36) + '" y="' + (cy + 24) +
+      '" text-anchor="middle">avg ' + fmtTok(tokDecide) + "</text>" +
+      '<text class="dc-dial-phase" x="' + (cx + 36) + '" y="' + (cy + 10) +
+      '" text-anchor="middle">Discover</text>' +
+      '<text class="dc-dial-phase-v" x="' + (cx + 36) + '" y="' + (cy + 24) +
+      '" text-anchor="middle">avg ' + fmtTok(tokDiscover) + "</text>" +
+      '<text class="dc-dial-phase" x="' + (cx - 36) + '" y="' + (cy + 44) +
+      '" text-anchor="middle">Economics</text>' +
+      '<text class="dc-dial-phase-v" x="' + (cx - 36) + '" y="' + (cy + 58) +
+      '" text-anchor="middle">avg ' + fmtTok(tokEcon) + "</text>" +
+      '<text class="dc-dial-phase" x="' + (cx + 36) + '" y="' + (cy + 44) +
+      '" text-anchor="middle">Capability</text>' +
+      '<text class="dc-dial-phase-v" x="' + (cx + 36) + '" y="' + (cy + 58) +
+      '" text-anchor="middle">avg ' + fmtTok(tokCap) + "</text>" +
+      "</svg>";
+
+    var workL = pw.workPct != null ? ("Work " + pw.workPct + "%") : "Work —";
+    var postL = pw.postPct != null ? ("Post job " + pw.postPct + "%") : "Post job —";
+    var legend =
+      '<div class="dc-dial-legend">' +
+      '<span><i class="dc-leg-work"></i>' + workL + "</span>" +
+      '<span><i class="dc-leg-post"></i>' + postL + "</span>" +
+      '<span><i class="dc-leg-fire"></i>Cycle fired</span>' +
+      '<span><i class="dc-leg-cur"></i>Current block</span>' +
+      "</div>";
+
+    var bezelLine = bezel != null
+      ? ("Bezel = " + fmtInt(bezel) + " EC ≈ 1 day (est.) · tick = " +
+        (tick != null ? fmtInt(tick) + " EC" : "—"))
+      : "Bezel = — (need measured block times)";
+    var cadenceLine =
+      "Cadence " +
+      (cadence != null ? fmtInt(cadence) + " EC / cycle" : "—") +
+      " ≈ " +
+      (cycDay != null ? cycDay + " cycles / day (est.)" : "—");
+    var tokLine =
+      "≈ " +
+      (tokDay != null ? fmtInt(tokDay) + " tok / agent / day (est.)" : "— tok / agent / day (est.)");
+    var sampleLine =
+      "Live · as of block " + (height != null ? fmtInt(height) : "—");
+
+    var foot =
+      '<div class="dc-dial-foot">' +
+      "<div>" + bezelLine + "</div>" +
+      "<div>" + cadenceLine + "</div>" +
+      "<div>" + tokLine + "</div>" +
+      "<div>" + sampleLine + "</div>" +
+      '<p class="dc-dial-note">Everything is measured in EC (here: Monero blocks on the bezel). ' +
+      '"Day" is only a derived translation, labeled as an estimate. ' +
+      "tok/agent/day est = avg tok/cycle × cycles/day est. " +
+      "Ring = Decision=work|post mix from /cycles. Center = DC token phase averages.</p>" +
+      "</div>";
+
     host.innerHTML =
-      '<div class="dc-ring">' + parts + '<div class="dc-hub">DC</div></div>' +
-      renderDcPostWorkBelow(dc, n);
+      '<div class="dc-dial">' + svg + legend + foot + renderDcAgentsBelow(dc) + "</div>";
+  }
+
+  function renderDcRing(dc, ec) {
+    renderDcDial(dc, ec);
   }
 
   function polar(cx, cy, r, deg) {
@@ -760,7 +892,7 @@
       setText("cycle-jl-summary", "not measured", true);
       setText("cycle-dc-status", "not measured", true);
       setText("cycle-ec-status", "not measured", true);
-      renderDcRing({ status: "not_measured" });
+      renderDcRing({ status: "not_measured" }, {});
       renderDcBlockers({});
       renderEcClock({});
       renderPresence({ agents: null, note: "Cycles API unreachable." });
@@ -852,12 +984,12 @@
     var dcNote = document.getElementById("cycle-dc-note");
     if (dcNote) {
       dcNote.textContent =
-        "Discover → Capability → Economics → Decision. Outcomes: post (buyer/stamp) or work (seller/claim).";
+        "Center: DC token phases. Ring: work vs post mix. Bezel: day in EC (blocks) with cycle fires + current block.";
     }
-    renderDcRing(dc);
+    var ec = d.economic_cycle || {};
+    renderDcRing(dc, ec);
     renderDcBlockers(dc);
 
-    var ec = d.economic_cycle || {};
     if (ec.status === "ok" && ec.current_height != null) {
       setText(
         "cycle-ec-status",
