@@ -142,9 +142,7 @@
     body.textContent = lines.join("\n");
   }
 
-  function renderDcPostWorkMeter(dc, n) {
-    var host = document.getElementById("dc-ring");
-    if (!host) return;
+  function dcPostWorkCounts(dc) {
     var mix = (dc && dc.decision_mix) || {};
     var bd = (dc && dc.by_decision) || {};
     var post = mix.post != null ? Number(mix.post) : Number(bd.post || 0);
@@ -152,8 +150,17 @@
     if (!Number.isFinite(post)) post = 0;
     if (!Number.isFinite(work)) work = 0;
     var total = post + work;
-    var postPct = total ? Math.round((post / total) * 1000) / 10 : 0;
-    var workPct = total ? Math.round((work / total) * 1000) / 10 : 0;
+    return {
+      post: post,
+      work: work,
+      total: total,
+      postPct: total ? Math.round((post / total) * 1000) / 10 : 0,
+      workPct: total ? Math.round((work / total) * 1000) / 10 : 0
+    };
+  }
+
+  function renderDcPostWorkBelow(dc, n) {
+    var pw = dcPostWorkCounts(dc);
     var byAD = (dc && dc.by_agent_decision) || {};
     var agentRows = Object.keys(byAD).sort().map(function (agent) {
       var row = byAD[agent] || {};
@@ -169,25 +176,50 @@
         "</span></div>"
       );
     }).join("");
-    var bar =
-      total > 0
-        ? '<div class="dc-pw-bar" role="img" aria-label="post ' + post + ", work " + work + '">' +
-          '<span class="dc-pw-post" style="width:' + postPct + '%"></span>' +
-          '<span class="dc-pw-work" style="width:' + workPct + '%"></span>' +
-          "</div>"
-        : '<div class="dc-pw-bar dc-pw-bar-empty"></div>';
-    host.innerHTML =
+    return (
       '<div class="dc-pw">' +
-      '<div class="dc-pw-head">post vs work</div>' +
-      bar +
       '<div class="dc-pw-counts">' +
-      '<span class="dc-pw-post-l">post <b>' + post + "</b> · " + postPct + "%</span>" +
-      '<span class="dc-pw-work-l">work <b>' + work + "</b> · " + workPct + "%</span>" +
+      '<span class="dc-pw-post-l">post <b>' + pw.post + "</b> · " + pw.postPct + "%</span>" +
+      '<span class="dc-pw-work-l">work <b>' + pw.work + "</b> · " + pw.workPct + "%</span>" +
       "</div>" +
       (agentRows ? '<div class="dc-pw-agents">' + agentRows + "</div>" : "") +
       '<p class="dc-pw-note">n=' + n +
-      " Heartbeat DC events. Phase wall-clock timers not logged yet — meter uses Decision=post|work from /cycles.</p>" +
+      " Heartbeat DC events · Decision=post|work from /cycles" +
+      (pw.total ? "" : " · no post/work samples yet") +
+      ".</p>" +
+      "</div>"
+    );
+  }
+
+  /* Circular ring driven by live post vs work mix (conic fill). */
+  function renderDcPostWorkRing(dc, n) {
+    var host = document.getElementById("dc-ring");
+    if (!host) return;
+    var pw = dcPostWorkCounts(dc);
+    var postDeg = pw.total ? (pw.post / pw.total) * 360 : 0;
+    var grad = pw.total
+      ? "conic-gradient(from -90deg, #58a6ff 0deg " + postDeg + "deg, #238636 " + postDeg + "deg 360deg)"
+      : "conic-gradient(from -90deg, var(--line) 0deg 360deg)";
+    var postRot = postDeg > 0 ? postDeg / 2 : 45;
+    var workRot = postDeg + (360 - postDeg) / 2;
+    if (!pw.total) {
+      postRot = 45;
+      workRot = 225;
+    }
+    var ring =
+      '<div class="dc-ring dc-ring-pw" style="background:' + grad + '" role="img" aria-label="post ' +
+      pw.post + " (" + pw.postPct + "%), work " + pw.work + " (" + pw.workPct + '%)">' +
+      '<div class="dc-seg" style="--rot:' + postRot + 'deg">' +
+      '<div class="dc-seg-label">Post</div>' +
+      '<div class="dc-seg-val">' + (pw.total ? pw.postPct + "%" : "—") + "</div>" +
+      "</div>" +
+      '<div class="dc-seg" style="--rot:' + workRot + 'deg">' +
+      '<div class="dc-seg-label">Work</div>' +
+      '<div class="dc-seg-val">' + (pw.total ? pw.workPct + "%" : "—") + "</div>" +
+      "</div>" +
+      '<div class="dc-hub">DC</div>' +
       "</div>";
+    host.innerHTML = ring + renderDcPostWorkBelow(dc, n);
   }
 
   function renderDcRing(dc) {
@@ -220,8 +252,8 @@
           "</div>";
         return;
       }
-      // Prefer live post/work meters from public /cycles over empty "timers" placeholder.
-      renderDcPostWorkMeter(dc, n);
+      // No phase timers yet — drive the circle from live post vs work.
+      renderDcPostWorkRing(dc, n);
       return;
     }
     var parts = phases.map(function (p, i) {
@@ -235,7 +267,10 @@
         "</div>"
       );
     }).join("");
-    host.innerHTML = '<div class="dc-ring">' + parts + '<div class="dc-hub">DC</div></div>';
+    // Prefer phase_averages for the ring when present; keep post/work numbers below.
+    host.innerHTML =
+      '<div class="dc-ring">' + parts + '<div class="dc-hub">DC</div></div>' +
+      renderDcPostWorkBelow(dc, n);
   }
 
   function polar(cx, cy, r, deg) {

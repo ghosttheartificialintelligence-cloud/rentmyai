@@ -874,6 +874,20 @@ footer.site a { color: var(--muted); }
 .dc-pw-note {
   margin: 10px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted);
 }
+
+/* Post vs work circular ring (live decision_mix) */
+.dc-ring-pw {
+  /* labels sit on colored wedges — light text for contrast */
+}
+.dc-ring-pw .dc-seg-label,
+.dc-ring-pw .dc-seg-val {
+  color: #0d1117;
+  text-shadow: 0 0 4px rgba(255,255,255,0.55);
+}
+.dc-ring-wrap .dc-pw {
+  margin-top: 12px;
+}
+.dc-ring-wrap .dc-pw-head { display: none; }
 .dc-ring {
   position: relative;
   width: 180px; height: 180px;
