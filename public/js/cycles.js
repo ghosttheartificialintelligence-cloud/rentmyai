@@ -162,9 +162,170 @@
   function fmtTok(v) {
     if (v == null || !Number.isFinite(Number(v))) return "—";
     var n = Number(v);
-    if (n >= 1000) return Math.round(n).toLocaleString("en-US");
+    /* Raw provider tokens. Do not rescale into thousands. */
+    if (Math.abs(n) >= 1000) return Math.round(n).toLocaleString("en-US");
     if (Math.abs(n - Math.round(n)) < 0.05) return String(Math.round(n));
     return (Math.round(n * 10) / 10).toString();
+  }
+
+  /* Decision Cycle token copy. Display only — does not change decisions.
+     mechanical → "0 LLM tokens (mechanical)"
+     not_measured (or excluded estimates) → "not measured"
+     measured / api_usage → numeric step averages
+     "k tok" only when the API says the unit is thousands. */
+  var DC_TOKEN_MECHANICAL = "0 LLM tokens (mechanical)";
+  var DC_TOKEN_STEPS = [
+    { key: "avg_tokens_capability", label: "Capability", step: "capability" },
+    { key: "avg_tokens_economics", label: "Economics", step: "economics" },
+    { key: "avg_tokens_decision", label: "Decision", step: "decision" },
+    { key: "avg_tokens_discover", label: "Discover", step: "discover" }
+  ];
+
+  function dcTokenNumber(v) {
+    if (v == null || v === "") return null;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function dcTokenUnitThousands(dc) {
+    if (!dc) return false;
+    var u = dc.token_unit != null ? dc.token_unit
+      : dc.tokens_unit != null ? dc.tokens_unit
+      : dc.token_units != null ? dc.token_units
+      : dc.token_scale;
+    if (u == null || u === false) return false;
+    if (u === 1000) return true;
+    var s = String(u).toLowerCase().replace(/[\s_-]+/g, "");
+    return s === "k" || s === "ktok" || s === "thousand" || s === "thousands" || s === "1000";
+  }
+
+  function dcTokenSamplesMechanical(samples) {
+    if (!samples || typeof samples !== "object") return false;
+    var fields = ["discover", "capability", "economics", "decision", "avg_per_step", "cycle_total"];
+    var sawZero = false;
+    for (var i = 0; i < fields.length; i++) {
+      if (samples[fields[i]] == null) continue;
+      var n = dcTokenNumber(samples[fields[i]]);
+      if (n !== 0) return false;
+      sawZero = true;
+    }
+    var measured = dcTokenNumber(samples.measured_events);
+    if (measured != null && measured > 0) return false;
+    var mechanical = dcTokenNumber(samples.mechanical_events);
+    if (mechanical != null && mechanical > 0) return true;
+    return sawZero;
+  }
+
+  function dcTokenMechanicalMajority(samples) {
+    if (!samples || typeof samples !== "object") return false;
+    var mechanical = dcTokenNumber(samples.mechanical_events);
+    if (mechanical == null || mechanical <= 0) return false;
+    var measured = dcTokenNumber(samples.measured_events);
+    var other = measured == null ? 0 : measured;
+    return mechanical > other;
+  }
+
+  function dcTokenWithNote(line, note) {
+    if (note == null) return line;
+    var extra = String(note).trim();
+    if (!extra || extra === line) return line;
+    if (extra.indexOf(line) === 0) {
+      var rest = extra.slice(line.length).replace(/^[\s.·:–—-]+/, "").trim();
+      return rest ? (line + " · " + rest) : line;
+    }
+    if (line.indexOf(extra) !== -1) return line;
+    return line + " · " + extra;
+  }
+
+  function dcTokenMode(dc) {
+    dc = dc || {};
+    var display = dc.token_display != null ? String(dc.token_display).toLowerCase() : "";
+    var source = dc.token_source != null ? String(dc.token_source).toLowerCase() : "";
+    var avgs = DC_TOKEN_STEPS.map(function (s) { return dcTokenNumber(dc[s.key]); });
+    var allZeroOrNull = avgs.every(function (v) { return v == null || v === 0; });
+    var anyNumber = avgs.some(function (v) { return v != null; }) || dcTokenNumber(dc.avg_tokens_cycle) != null;
+
+    if (display === "mechanical") return "mechanical";
+    if (display === "not_measured") return "not_measured";
+    if (display === "measured" || source === "api_usage") {
+      return anyNumber ? "measured" : "not_measured";
+    }
+    if (source === "mechanical") return "mechanical";
+
+    if (allZeroOrNull && dcTokenSamplesMechanical(dc.token_samples)) return "mechanical";
+    var explicitZero = avgs.some(function (v) { return v === 0; });
+    if (explicitZero && allZeroOrNull && dcTokenMechanicalMajority(dc.token_samples)) return "mechanical";
+    /* Nulls are excluded estimates. Unmarked numbers, including sub-10
+       means mixed with zeros, are not provider usage. */
+    return "not_measured";
+  }
+
+  function dcTokenReadout(dc) {
+    dc = dc || {};
+    var mode = dcTokenMode(dc);
+    var note = dc.token_note;
+    var thousands = dcTokenUnitThousands(dc);
+    var steps = { discover: "—", capability: "—", economics: "—", decision: "—" };
+    if (mode === "mechanical") {
+      DC_TOKEN_STEPS.forEach(function (s) { steps[s.step] = "0"; });
+      return {
+        mode: mode,
+        line: dcTokenWithNote(DC_TOKEN_MECHANICAL, note),
+        hold: false,
+        steps: steps,
+        center: "0",
+        centerLines: ["0 LLM tokens ", "(mechanical)"],
+        centerPhrase: true,
+        sub: ""
+      };
+    }
+    if (mode === "measured") {
+      var parts = [];
+      DC_TOKEN_STEPS.forEach(function (s) {
+        var v = dcTokenNumber(dc[s.key]);
+        steps[s.step] = v == null ? "—" : fmtTok(v);
+        if (v != null) parts.push(s.label + " " + fmtTok(v));
+      });
+      var total = dcTokenNumber(dc.avg_tokens_cycle);
+      if (total == null) {
+        var finite = DC_TOKEN_STEPS.map(function (s) { return dcTokenNumber(dc[s.key]); });
+        if (finite.every(function (v) { return v != null; })) {
+          total = finite.reduce(function (a, b) { return a + b; }, 0);
+        }
+      }
+      var line = "(Avg Tokens/step)/cycle · " + parts.join(" / ");
+      if (thousands) line += " k tok";
+      return {
+        mode: mode,
+        line: dcTokenWithNote(line, note),
+        hold: false,
+        steps: steps,
+        center: total == null ? "—" : fmtTok(total),
+        centerLines: null,
+        centerPhrase: false,
+        sub: thousands ? "k tok / cycle" : "avg tok / cycle"
+      };
+    }
+    var missing = dcTokenWithNote("(Avg Tokens/step)/cycle · not measured", note);
+    return {
+      mode: "not_measured",
+      line: missing,
+      hold: true,
+      steps: steps,
+      center: "not measured",
+      centerLines: null,
+      centerPhrase: true,
+      sub: ""
+    };
+  }
+
+  function applyDcTokenLine(dc) {
+    var el = document.getElementById("cycle-dc-tokens");
+    if (!el) return;
+    var view = dcTokenReadout(dc || {});
+    el.textContent = view.line;
+    if (view.hold) el.classList.add("hold");
+    else el.classList.remove("hold");
   }
 
   function fmtInt(v) {
@@ -374,19 +535,7 @@
     var avgBlock = dcAvgBlockSeconds(dial, ec);
     var curPos = bezelPosEc(dial, ec, height);
 
-    var tokDecide = dc.avg_tokens_decision;
-    var tokDiscover = dc.avg_tokens_discover;
-    var tokEcon = dc.avg_tokens_economics;
-    var tokCap = dc.avg_tokens_capability;
-    var tokTotal = dc.avg_tokens_cycle;
-    if (tokTotal == null) {
-      var parts = [tokDecide, tokDiscover, tokEcon, tokCap].filter(function (v) {
-        return v != null && Number.isFinite(Number(v));
-      });
-      if (parts.length) {
-        tokTotal = parts.reduce(function (a, b) { return a + Number(b); }, 0);
-      }
-    }
+    var tokens = dcTokenReadout(dc);
 
     var workReasons = reasonMixSide(dc, "work_why_not_post", WORK_WHY_NOT_POST);
     var postReasons = reasonMixSide(dc, "post_why_not_work", POST_WHY_NOT_WORK);
@@ -449,11 +598,11 @@
       ringPaths += reasonSpan(decideStart + workSpan, postSpan, POST_WHY_NOT_WORK, postReasons.counts, postShades, "#f97316", "dc-p");
     }
 
-    function stepLabel(name, tok, deg) {
+    function stepLabel(name, avgText, deg) {
       var p = polarDeg(cx, cy, ringR, deg);
       return (
         '<text class="dc-step-name" x="' + p.x + '" y="' + (p.y - 7) + '" text-anchor="middle">' + name + "</text>" +
-        '<text class="dc-step-avg" x="' + p.x + '" y="' + (p.y + 9) + '" text-anchor="middle">avg ' + fmtTok(tok) + "</text>"
+        '<text class="dc-step-avg" x="' + p.x + '" y="' + (p.y + 9) + '" text-anchor="middle">avg ' + avgText + "</text>"
       );
     }
 
@@ -504,14 +653,24 @@
       ringPaths +
       '<circle cx="' + cx + '" cy="' + cy + '" r="' + hubR +
       '" fill="#0d1117" stroke="#21262d" stroke-width="1"/>' +
-      stepLabel("Discover", tokDiscover, 45) +
-      stepLabel("Capability", tokCap, 135) +
-      stepLabel("Economics", tokEcon, 225) +
-      stepLabel("Decide", tokDecide, 315) +
-      '<text class="dc-dial-total" x="' + cx + '" y="' + (cy - 2) +
-      '" text-anchor="middle" dominant-baseline="middle">' + fmtTok(tokTotal) + "</text>" +
-      '<text class="dc-dial-total-sub" x="' + cx + '" y="' + (cy + 16) +
-      '" text-anchor="middle">avg tok / cycle</text>' +
+      stepLabel("Discover", tokens.steps.discover, 45) +
+      stepLabel("Capability", tokens.steps.capability, 135) +
+      stepLabel("Economics", tokens.steps.economics, 225) +
+      stepLabel("Decide", tokens.steps.decision, 315) +
+      (tokens.centerLines
+        ? ('<text class="dc-dial-total' + (tokens.centerPhrase ? " dc-dial-total-phrase" : "") +
+          '" x="' + cx + '" y="' + cy + '" text-anchor="middle" dominant-baseline="middle">' +
+          tokens.centerLines.map(function (line, i) {
+            return '<tspan x="' + cx + '" dy="' + (i === 0 ? -8 : 16) + '">' + line + "</tspan>";
+          }).join("") +
+          "</text>")
+        : ('<text class="dc-dial-total' + (tokens.centerPhrase ? " dc-dial-total-phrase" : "") +
+          '" x="' + cx + '" y="' + (tokens.sub ? cy - 2 : cy) +
+          '" text-anchor="middle" dominant-baseline="middle">' + tokens.center + "</text>")) +
+      (tokens.sub
+        ? ('<text class="dc-dial-total-sub" x="' + cx + '" y="' + (cy + 16) +
+          '" text-anchor="middle">' + tokens.sub + "</text>")
+        : "") +
       curMark +
       "</svg>";
 
@@ -1063,6 +1222,7 @@
     if (!result) {
       setText("cycle-jl-summary", "not measured", true);
       setText("cycle-dc-status", "not measured", true);
+      applyDcTokenLine({});
       setText("cycle-ec-status", "not measured", true);
       renderDcRing({ status: "not_measured" }, {});
       renderDcBlockers({});
@@ -1104,29 +1264,7 @@
     var intervalN = vel.n != null ? Number(vel.n) : null;
     var early = dc.early === true || (dc.sample_good_at_n != null && cycleCount < Number(dc.sample_good_at_n));
     var goodAt = dc.sample_good_at_n != null ? Number(dc.sample_good_at_n) : 30;
-    var tokParts = [];
-    function tokAvg(key, label) {
-      var v = dc[key];
-      if (v != null && Number.isFinite(Number(v))) tokParts.push(label + " " + Number(v).toFixed(0));
-    }
-    tokAvg("avg_tokens_capability", "Capability");
-    tokAvg("avg_tokens_economics", "Economics");
-    tokAvg("avg_tokens_decision", "Decision");
-    tokAvg("avg_tokens_discover", "Discover");
-    var tokEl = document.getElementById("cycle-dc-tokens");
-    if (tokEl) {
-      if (tokParts.length) {
-        var sampleN = dc.token_samples && dc.token_samples.avg_per_step != null
-          ? dc.token_samples.avg_per_step
-          : (dc.token_samples && dc.token_samples.capability);
-        var sampleNote = sampleN != null ? " · samples=" + sampleN : "";
-        tokEl.textContent = "(Avg Tokens/step)/cycle · " + tokParts.join(" / ") + sampleNote;
-        tokEl.classList.remove("hold");
-      } else {
-        tokEl.textContent = "(Avg Tokens/step)/cycle · not measured";
-        tokEl.classList.add("hold");
-      }
-    }
+    applyDcTokenLine(dc);
     if (dc.status === "not_measured" || !cycleCount) {
       setText("cycle-dc-status", "not measured", true);
       setText("cycle-dc-avg", "No cycles yet — invite agents to record decisions", true);

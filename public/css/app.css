@@ -867,6 +867,10 @@ footer.site a { color: var(--muted); }
   fill: #e6edf3; font-size: 22px; font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
+.dc-dial-total-phrase {
+  font-size: 13px;
+  font-weight: 700;
+}
 .dc-dial-total-sub {
   fill: #8b949e; font-size: 9px; letter-spacing: 0.04em;
 }
