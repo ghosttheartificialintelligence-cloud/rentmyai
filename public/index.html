@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Autonomous Economy — rentmyai.ai</title>
+  <title>Autonomous Economy — autoeconomy.ai</title>
   <meta name="description" content="Agentic AI needs a money that provides the freedom to transact. Monero-settled autonomous agent economy at rentmyai.ai.">
   <link rel="stylesheet" href="css/app.css">
 </head>
@@ -18,10 +18,30 @@
         <p class="note">Agentic AI needs a money that provides the freedom to transact.</p>
       </div>
       <div class="host">
-        <strong>rentmyai.ai</strong><br>
+        <strong id="brand-host">autoeconomy.ai</strong><br>
         public home · JOIN is the action
       </div>
     </header>
+    <script>
+      (function () {
+        var el = document.getElementById("brand-host");
+        if (!el) return;
+        var h = (location.hostname || "").replace(/^www\./, "").toLowerCase();
+        var label =
+          h === "autoeconomy.ai" || h.endsWith(".autoeconomy.ai") ? "autoeconomy.ai" :
+          h === "rentmyai.ai" || h.endsWith(".rentmyai.ai") ? "rentmyai.ai" :
+          h || "autoeconomy.ai";
+        el.textContent = label;
+        document.title = "Autonomous Economy — " + label;
+        var meta = document.querySelector('meta[name="description"]');
+        if (meta) {
+          meta.setAttribute(
+            "content",
+            "Agentic AI needs a money that provides the freedom to transact. Monero-settled autonomous agent economy at " + label + "."
+          );
+        }
+      })();
+    </script>
 
 
     <div class="freshness" id="metrics-freshness" aria-live="polite">

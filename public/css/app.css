@@ -834,6 +834,54 @@ footer.site a { color: var(--muted); }
 
 /* ── Cycles extras (Decision ring + EC stub) ── */
 .dc-ring-wrap { margin: 12px 0 8px; min-height: 160px; }
+
+/* Bryan DC dial (work/post ring + day bezel + token hub) */
+.dc-ring-wrap { margin: 8px 0 4px; min-height: 200px; }
+.dc-dial { max-width: 320px; margin: 0 auto; }
+.dc-dial-svg { display: block; margin: 0 auto; max-width: 300px; }
+.dc-dial-tick { stroke: #8b949e; stroke-width: 1.5; }
+.dc-dial-fire { fill: #a371f7; }
+.dc-dial-current { fill: none; }
+.dc-dial-total {
+  fill: #e6edf3; font-size: 22px; font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.dc-dial-total-sub {
+  fill: #8b949e; font-size: 9px; letter-spacing: 0.04em;
+}
+.dc-dial-phase {
+  fill: #c9d1d9; font-size: 9px; font-weight: 600;
+}
+.dc-dial-phase-v {
+  fill: #8b949e; font-size: 9px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.dc-dial-legend {
+  display: flex; flex-wrap: wrap; gap: 10px 14px; justify-content: center;
+  margin: 12px 0 8px; font-size: 12px; color: var(--title);
+}
+.dc-dial-legend i {
+  display: inline-block; width: 10px; height: 10px; margin-right: 6px;
+  vertical-align: -1px; border-radius: 2px;
+}
+.dc-leg-work { background: #3fb950; }
+.dc-leg-post { background: #f0883e; }
+.dc-leg-fire {
+  background: #a371f7; border-radius: 50% !important; width: 8px !important; height: 8px !important;
+}
+.dc-leg-cur {
+  background: transparent !important; border: 2px solid #f0883e; border-radius: 50% !important;
+  width: 8px !important; height: 8px !important; box-sizing: border-box;
+}
+.dc-dial-foot {
+  margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--muted);
+  font-family: var(--mono);
+}
+.dc-dial-foot div { margin: 2px 0; }
+.dc-dial-note {
+  margin: 8px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted);
+  font-family: var(--sans);
+}
 .dc-empty { text-align: center; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .dc-empty-ring {
   width: 110px; height: 110px; margin: 8px auto 12px;
@@ -841,6 +889,53 @@ footer.site a { color: var(--muted); }
   border: 3px dashed var(--line);
   background: radial-gradient(circle at center, transparent 48%, var(--panel-2) 49%);
 }
+
+/* Decision Cycle post vs work meter (live /cycles by_decision) */
+.dc-pw { margin: 8px 0 4px; }
+.dc-pw-head {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+}
+.dc-pw-bar {
+  display: flex; height: 14px; border-radius: 999px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--panel-2);
+}
+.dc-pw-bar-empty { opacity: 0.45; }
+.dc-pw-post { background: #f0883e; min-width: 0; }
+.dc-pw-work { background: #238636; min-width: 0; }
+.dc-pw-counts {
+  display: flex; justify-content: space-between; gap: 12px;
+  margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--title);
+}
+.dc-pw-post-l b { color: #f0883e; }
+.dc-pw-work-l b { color: #3fb950; }
+.dc-pw-agents {
+  margin-top: 10px; display: grid; gap: 4px;
+  font-size: 12px; color: var(--muted);
+}
+.dc-pw-agent {
+  display: flex; justify-content: space-between; gap: 10px;
+  border-top: 1px solid var(--line); padding-top: 4px;
+}
+.dc-pw-agent-n { color: var(--title); font-weight: 600; }
+.dc-pw-agent-v { font-family: var(--mono); font-size: 11px; }
+.dc-pw-note {
+  margin: 10px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted);
+}
+
+/* Post vs work circular ring (live decision_mix) */
+.dc-ring-pw {
+  /* labels sit on colored wedges — light text for contrast */
+}
+.dc-ring-pw .dc-seg-label,
+.dc-ring-pw .dc-seg-val {
+  color: #0d1117;
+  text-shadow: 0 0 4px rgba(255,255,255,0.55);
+}
+.dc-ring-wrap .dc-pw {
+  margin-top: 12px;
+}
+.dc-ring-wrap .dc-pw-head { display: none; }
 .dc-ring {
   position: relative;
   width: 180px; height: 180px;
