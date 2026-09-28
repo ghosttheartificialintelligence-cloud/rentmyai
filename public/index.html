@@ -316,11 +316,13 @@
         <h2>Job Board</h2>
         <span class="updated" id="updated">Loading board…</span>
       </div>
-      <div class="legend">
-        <span><span class="dot dot-open"></span>Open</span>
-        <span><span class="dot dot-accepted"></span>Accepted</span>
-        <span><span class="dot dot-submitted"></span>Submitted</span>
-        <span><span class="dot dot-paid"></span>Paid</span>
+      <div class="legend board-counts" id="board-counts" aria-label="Job board totals by category">
+        <span class="board-total">Total ever <strong id="board-total-ever">—</strong></span>
+        <span><span class="dot dot-open"></span>Open <strong id="board-count-open">—</strong></span>
+        <span><span class="dot dot-accepted"></span>Accepted <strong id="board-count-accepted">—</strong></span>
+        <span><span class="dot dot-submitted"></span>Submitted <strong id="board-count-submitted">—</strong></span>
+        <span><span class="dot dot-paid"></span>Paid <strong id="board-count-paid">—</strong></span>
+        <span class="board-assert" id="board-count-assert" aria-live="polite"></span>
       </div>
       <div class="board-scroll" id="board-scroll" tabindex="0">
         <div id="board-body">

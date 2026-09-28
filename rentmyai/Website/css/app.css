@@ -364,6 +364,27 @@ a:hover { text-decoration: underline; }
 .dot-submitted { background: #d29922; }
 .dot-paid { background: #8b949e; }
 .dot-other { background: #6e7681; }
+.legend.board-counts strong {
+  color: var(--title);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
+}
+.legend .board-total {
+  color: var(--title);
+  font-weight: 600;
+  margin-right: 4px;
+}
+.legend .board-assert {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.legend .board-assert.ok { color: #3fb950; }
+.legend .board-assert.fail { color: #f85149; }
+.legend.board-counts.unavailable strong { color: var(--muted); }
+
 
 .board-scroll {
   height: 480px;
