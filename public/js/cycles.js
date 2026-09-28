@@ -117,7 +117,7 @@
     if (!bKeys.length && !abKeys.length) {
       body.classList.add("hold");
       body.textContent =
-        "No Decision memos yet. Pass reasons: Fit, Margin, Capacity, Value, or other.";
+        "No Decision memos yet. Claim-pass: Fit · Vague · Margin · Capacity · Other. Work skip-post: Need · Alignment · Cost · Value · Spec · Pending · Judge · Market · Other · Timing.";
       return;
     }
     body.classList.remove("hold");
@@ -209,7 +209,130 @@
     );
   }
 
-  /* Bryan-approved DC dial: work/post ring + day bezel + token center. Live /cycles only. */
+  /* Block-native Decision Cycle dial.
+     Bezel is fixed in EC: 72 ticks (1 EC each), long tick every 6 EC, full turn = 72 EC = 720 blocks.
+     1 EC = 10 Monero blocks. Tick geometry never follows wall-clock hours.
+     Human-time labels float from recent avg_block_seconds. ecs_per_day stays on the EC clock, not this bezel.
+     Inner ring = live Work/Post reason_mix. Center = live avg tok. Sketch % are layout only. */
+  var DC_BEZEL_EC = 72;
+  var DC_LONG_TICK_EC = 6;
+  var DC_BLOCKS_PER_EC = 10;
+  var WORK_WHY_NOT_POST = [
+    "need", "alignment", "cost", "value", "spec",
+    "pending", "judge", "market", "other", "timing"
+  ];
+  var POST_WHY_NOT_WORK = ["fit", "vague", "margin", "capacity", "other"];
+  var WORK_TEAL = [
+    "#1f6f5a", "#238b6d", "#2ea043", "#3fb950", "#56d364",
+    "#7ee787", "#3d9a78", "#2d8a6a", "#4ac28a", "#6fddb0"
+  ];
+  var POST_ORANGE = [
+    "#da3633", "#f85149", "#f0883e", "#ffa657", "#d4a27f"
+  ];
+
+  function reasonMixSide(dc, key, codes) {
+    var rm = (dc && dc.reason_mix && dc.reason_mix[key]) || null;
+    var counts = {};
+    var shares = {};
+    var n = 0;
+    codes.forEach(function (c) { counts[c] = 0; shares[c] = null; });
+    if (rm && rm.counts && typeof rm.counts === "object") {
+      codes.forEach(function (c) {
+        var v = Number(rm.counts[c]);
+        counts[c] = Number.isFinite(v) && v > 0 ? v : 0;
+      });
+      n = codes.reduce(function (a, c) { return a + counts[c]; }, 0);
+    }
+    if (rm && rm.shares_pct && typeof rm.shares_pct === "object" && n > 0) {
+      codes.forEach(function (c) {
+        var v = rm.shares_pct[c];
+        shares[c] = v != null && Number.isFinite(Number(v)) ? Number(v) : (n ? Math.round((counts[c] / n) * 1000) / 10 : null);
+      });
+    } else if (n > 0) {
+      codes.forEach(function (c) {
+        shares[c] = Math.round((counts[c] / n) * 1000) / 10;
+      });
+    }
+    return { counts: counts, shares: shares, n: n, label: (rm && rm.label) || key };
+  }
+
+  function fmtShare(share, hasData) {
+    if (!hasData) return "—";
+    if (share == null || !Number.isFinite(Number(share))) return "0%";
+    var v = Number(share);
+    if (Math.abs(v - Math.round(v)) < 0.05) return Math.round(v) + "%";
+    return (Math.round(v * 10) / 10) + "%";
+  }
+
+  function titleCaseCode(c) {
+    if (!c) return "";
+    return String(c).charAt(0).toUpperCase() + String(c).slice(1);
+  }
+
+  function dcAvgBlockSeconds(dial, ec) {
+    var candidates = [dial && dial.avg_block_seconds, ec && ec.avg_block_seconds];
+    for (var i = 0; i < candidates.length; i++) {
+      var v = Number(candidates[i]);
+      if (Number.isFinite(v) && v > 0) return v;
+    }
+    return null;
+  }
+
+  /* Human label for a fixed block count. Minutes under 90, hours under 20, otherwise days.
+     720 blocks at ~120s lands on 1 day; faster/slower blocks move only this label. */
+  function fmtHumanEst(seconds) {
+    if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return "—";
+    var mins = seconds / 60;
+    if (mins < 90) return "≈ " + Math.round(mins) + " min (est.)";
+    var hours = seconds / 3600;
+    if (hours < 20) {
+      var h = Math.round(hours * 10) / 10;
+      var hs = Math.abs(h - Math.round(h)) < 0.05 ? String(Math.round(h)) : String(h);
+      return "≈ " + hs + " h (est.)";
+    }
+    var days = seconds / 86400;
+    var d = Math.round(days * 10) / 10;
+    var ds = Math.abs(d - Math.round(d)) < 0.05 ? String(Math.round(d)) : String(d);
+    var unit = Math.abs(Number(ds) - 1) < 0.001 ? "day" : "days";
+    return "≈ " + ds + " " + unit + " (est.)";
+  }
+
+  function fmtBlockSample(avgBlockSeconds) {
+    if (avgBlockSeconds == null || !Number.isFinite(avgBlockSeconds) || avgBlockSeconds <= 0) return "—";
+    return (Math.round((avgBlockSeconds / 60) * 10) / 10).toFixed(1) + " min / block";
+  }
+
+  function dcEcIndex(dial, ec, height) {
+    if (dial && dial.current_ec_index != null && Number.isFinite(Number(dial.current_ec_index))) {
+      return Number(dial.current_ec_index);
+    }
+    if (ec && ec.ec_index != null && Number.isFinite(Number(ec.ec_index))) return Number(ec.ec_index);
+    if (height != null && Number.isFinite(height)) return Math.floor(height / DC_BLOCKS_PER_EC);
+    return null;
+  }
+
+  function dcBlockInEc(ec, height) {
+    if (ec && ec.block_in_ec != null && Number.isFinite(Number(ec.block_in_ec))) {
+      return Number(ec.block_in_ec);
+    }
+    if (height != null && Number.isFinite(height)) return height % DC_BLOCKS_PER_EC;
+    return null;
+  }
+
+  /* Progress through the fixed 72-EC turn, including how far the current EC has gone. */
+  function bezelPosEc(dial, ec, height) {
+    var idx = dcEcIndex(dial, ec, height);
+    if (idx == null) return null;
+    var blockIn = dcBlockInEc(ec, height);
+    var frac = 0;
+    if (blockIn != null && Number.isFinite(blockIn)) {
+      frac = Math.max(0, Math.min(0.999, blockIn / DC_BLOCKS_PER_EC));
+    }
+    var pos = (idx % DC_BEZEL_EC) + frac;
+    if (pos < 0) pos += DC_BEZEL_EC;
+    return pos % DC_BEZEL_EC;
+  }
+
   function renderDcDial(dc, ec) {
     var host = document.getElementById("dc-ring");
     if (!host) return;
@@ -224,18 +347,10 @@
 
     var pw = dcPostWorkCounts(dc);
     var dial = (dc && dc.dial) || {};
-    var bezel = dial.bezel_ec != null && Number.isFinite(Number(dial.bezel_ec)) ? Number(dial.bezel_ec) : null;
-    var tick = dial.tick_ec != null && Number.isFinite(Number(dial.tick_ec)) ? Number(dial.tick_ec) : null;
     var height = dial.current_height != null ? Number(dial.current_height)
       : (ec && ec.current_height != null ? Number(ec.current_height) : null);
-    var curPos = dial.current_pos_ec != null && Number.isFinite(Number(dial.current_pos_ec))
-      ? Number(dial.current_pos_ec) : null;
-    var fires = Array.isArray(dial.fires) ? dial.fires : [];
-    var cadence = dial.cadence_ec != null && Number.isFinite(Number(dial.cadence_ec)) ? Number(dial.cadence_ec) : null;
-    var cycDay = dial.cycles_per_day_est != null && Number.isFinite(Number(dial.cycles_per_day_est))
-      ? Number(dial.cycles_per_day_est) : null;
-    var tokDay = dial.tok_per_agent_day_est != null && Number.isFinite(Number(dial.tok_per_agent_day_est))
-      ? Number(dial.tok_per_agent_day_est) : null;
+    var avgBlock = dcAvgBlockSeconds(dial, ec);
+    var curPos = bezelPosEc(dial, ec, height);
 
     var tokDecide = dc.avg_tokens_decision;
     var tokDiscover = dc.avg_tokens_discover;
@@ -251,151 +366,178 @@
       }
     }
 
-    var size = 280;
+    var workReasons = reasonMixSide(dc, "work_why_not_post", WORK_WHY_NOT_POST);
+    var postReasons = reasonMixSide(dc, "post_why_not_work", POST_WHY_NOT_WORK);
+
+    var size = 300;
     var cx = size / 2;
     var cy = size / 2;
-    var bezelR = 128;
-    var ringR = 108;
-    var ringStroke = 22;
+    var bezelR = 138;
+    var ringR = 112;
+    var ringStroke = 24;
     var hubR = 78;
 
-    // Ring: work (green) then post (orange), starting at top (-90deg / 12 o'clock)
     var workPct = pw.workPct != null ? pw.workPct : 0;
     var postPct = pw.postPct != null ? pw.postPct : 0;
     var workDeg = pw.total ? (workPct / 100) * 360 : 0;
     var postDeg = pw.total ? (postPct / 100) * 360 : 0;
+
+    function segmentedArc(startDeg, totalDeg, codes, counts, colors, classPrefix) {
+      var html = "";
+      if (totalDeg < 0.5) return html;
+      var sum = codes.reduce(function (a, c) { return a + (counts[c] || 0); }, 0);
+      if (sum <= 0) {
+        // Honest: side exists in mix but no reason codes → solid muted segment
+        html +=
+          '<path class="' + classPrefix + '-empty" d="' + describeArc(cx, cy, ringR, startDeg, startDeg + totalDeg) +
+          '" fill="none" stroke="#30363d" stroke-width="' + ringStroke +
+          '" stroke-linecap="butt"/>';
+        return html;
+      }
+      var cursor = startDeg;
+      codes.forEach(function (c, i) {
+        var cnt = counts[c] || 0;
+        if (cnt <= 0) return;
+        var seg = (cnt / sum) * totalDeg;
+        if (seg < 0.35) seg = 0.35;
+        var col = colors[i % colors.length];
+        html +=
+          '<path class="' + classPrefix + '-' + c + '" d="' +
+          describeArc(cx, cy, ringR, cursor, cursor + seg) +
+          '" fill="none" stroke="' + col + '" stroke-width="' + ringStroke +
+          '" stroke-linecap="butt">' +
+          '<title>' + titleCaseCode(c) + " · " + cnt + "</title></path>";
+        cursor += seg;
+      });
+      return html;
+    }
+
     var ringPaths = "";
     if (!pw.total) {
       ringPaths =
         '<circle cx="' + cx + '" cy="' + cy + '" r="' + ringR +
         '" fill="none" stroke="#30363d" stroke-width="' + ringStroke + '"/>';
-    } else if (workDeg >= 359.5) {
-      ringPaths =
-        '<circle cx="' + cx + '" cy="' + cy + '" r="' + ringR +
-        '" fill="none" stroke="#3fb950" stroke-width="' + ringStroke + '"/>';
-    } else if (postDeg >= 359.5) {
-      ringPaths =
-        '<circle cx="' + cx + '" cy="' + cy + '" r="' + ringR +
-        '" fill="none" stroke="#f0883e" stroke-width="' + ringStroke + '"/>';
     } else {
-      if (workDeg > 0.5) {
-        ringPaths +=
-          '<path class="dc-dial-work" d="' + describeArc(cx, cy, ringR, 0, workDeg) +
-          '" fill="none" stroke="#3fb950" stroke-width="' + ringStroke +
-          '" stroke-linecap="butt"/>';
-      }
-      if (postDeg > 0.5) {
-        ringPaths +=
-          '<path class="dc-dial-post" d="' + describeArc(cx, cy, ringR, workDeg, workDeg + postDeg) +
-          '" fill="none" stroke="#f0883e" stroke-width="' + ringStroke +
-          '" stroke-linecap="butt"/>';
-      }
+      ringPaths += segmentedArc(0, workDeg, WORK_WHY_NOT_POST, workReasons.counts, WORK_TEAL, "dc-w");
+      ringPaths += segmentedArc(workDeg, postDeg, POST_WHY_NOT_WORK, postReasons.counts, POST_ORANGE, "dc-p");
     }
 
-    // Bezel + ticks
+    // Fixed bezel: 72 ticks = 72 EC. Long tick every 6 EC. Spacing does not follow block time.
     var ticks = "";
-    if (bezel && tick && tick > 0) {
-      for (var t = 0; t < bezel; t += tick) {
-        var ang = (t / bezel) * 360;
-        var outer = polarDeg(cx, cy, bezelR + 4, ang);
-        var inner = polarDeg(cx, cy, bezelR - 6, ang);
-        ticks +=
-          '<line class="dc-dial-tick" x1="' + inner.x + '" y1="' + inner.y +
-          '" x2="' + outer.x + '" y2="' + outer.y + '"/>';
-      }
+    for (var ti = 0; ti < DC_BEZEL_EC; ti++) {
+      var ang = (ti / DC_BEZEL_EC) * 360;
+      var isLong = ti % DC_LONG_TICK_EC === 0;
+      var outer = polarDeg(cx, cy, bezelR + (isLong ? 6 : 2.5), ang);
+      var inner = polarDeg(cx, cy, bezelR - (isLong ? 6 : 2), ang);
+      ticks +=
+        '<line class="dc-dial-tick' + (isLong ? " dc-dial-tick-long" : "") +
+        '" x1="' + inner.x + '" y1="' + inner.y +
+        '" x2="' + outer.x + '" y2="' + outer.y + '"/>';
     }
 
-    // Purple fire dots
-    var fireDots = "";
-    fires.forEach(function (f) {
-      var pos = f && f.pos_ec != null ? Number(f.pos_ec) : null;
-      if (pos == null || !bezel || bezel <= 0) return;
-      var fang = (pos / bezel) * 360;
-      var fp = polarDeg(cx, cy, bezelR, fang);
-      fireDots +=
-        '<circle class="dc-dial-fire" cx="' + fp.x + '" cy="' + fp.y + '" r="3.5"/>';
-    });
-
-    // Current block hollow orange
     var curMark = "";
-    if (curPos != null && bezel && bezel > 0) {
-      var cang = (curPos / bezel) * 360;
+    if (curPos != null) {
+      var cang = (curPos / DC_BEZEL_EC) * 360;
       var cp = polarDeg(cx, cy, bezelR, cang);
       curMark =
         '<circle class="dc-dial-current" cx="' + cp.x + '" cy="' + cp.y +
-        '" r="5.5" fill="none" stroke="#f0883e" stroke-width="2"/>';
+        '" r="5.2" fill="#0d1117" stroke="#f0b429" stroke-width="2"/>';
     }
 
+    // Center: total absolute middle; phases at four corners of hub
     var svg =
       '<svg class="dc-dial-svg" viewBox="0 0 ' + size + " " + size +
-      '" width="100%" role="img" aria-label="Decision Cycle dial">' +
+      '" width="100%" role="img" aria-label="Decision Cycle dial, 72 EC per turn, one tick per EC">' +
       '<circle class="dc-dial-bezel" cx="' + cx + '" cy="' + cy + '" r="' + bezelR +
       '" fill="none" stroke="#3a424c" stroke-width="1.5"/>' +
       ticks +
       ringPaths +
       '<circle cx="' + cx + '" cy="' + cy + '" r="' + hubR +
       '" fill="#0d1117" stroke="#21262d" stroke-width="1"/>' +
-      fireDots +
       curMark +
-      // Center labels
-      '<text class="dc-dial-total" x="' + cx + '" y="' + (cy - 28) +
-      '" text-anchor="middle">' + fmtTok(tokTotal) + "</text>" +
-      '<text class="dc-dial-total-sub" x="' + cx + '" y="' + (cy - 12) +
+      '<text class="dc-dial-total" x="' + cx + '" y="' + (cy + 2) +
+      '" text-anchor="middle" dominant-baseline="middle">' + fmtTok(tokTotal) + "</text>" +
+      '<text class="dc-dial-total-sub" x="' + cx + '" y="' + (cy + 18) +
       '" text-anchor="middle">avg tok / cycle</text>' +
-      '<text class="dc-dial-phase" x="' + (cx - 36) + '" y="' + (cy + 10) +
+      '<text class="dc-dial-phase" x="' + (cx - 40) + '" y="' + (cy - 42) +
       '" text-anchor="middle">Decide</text>' +
-      '<text class="dc-dial-phase-v" x="' + (cx - 36) + '" y="' + (cy + 24) +
+      '<text class="dc-dial-phase-v" x="' + (cx - 40) + '" y="' + (cy - 28) +
       '" text-anchor="middle">avg ' + fmtTok(tokDecide) + "</text>" +
-      '<text class="dc-dial-phase" x="' + (cx + 36) + '" y="' + (cy + 10) +
+      '<text class="dc-dial-phase" x="' + (cx + 40) + '" y="' + (cy - 42) +
       '" text-anchor="middle">Discover</text>' +
-      '<text class="dc-dial-phase-v" x="' + (cx + 36) + '" y="' + (cy + 24) +
+      '<text class="dc-dial-phase-v" x="' + (cx + 40) + '" y="' + (cy - 28) +
       '" text-anchor="middle">avg ' + fmtTok(tokDiscover) + "</text>" +
-      '<text class="dc-dial-phase" x="' + (cx - 36) + '" y="' + (cy + 44) +
+      '<text class="dc-dial-phase" x="' + (cx - 40) + '" y="' + (cy + 40) +
       '" text-anchor="middle">Economics</text>' +
-      '<text class="dc-dial-phase-v" x="' + (cx - 36) + '" y="' + (cy + 58) +
+      '<text class="dc-dial-phase-v" x="' + (cx - 40) + '" y="' + (cy + 54) +
       '" text-anchor="middle">avg ' + fmtTok(tokEcon) + "</text>" +
-      '<text class="dc-dial-phase" x="' + (cx + 36) + '" y="' + (cy + 44) +
+      '<text class="dc-dial-phase" x="' + (cx + 40) + '" y="' + (cy + 40) +
       '" text-anchor="middle">Capability</text>' +
-      '<text class="dc-dial-phase-v" x="' + (cx + 36) + '" y="' + (cy + 58) +
+      '<text class="dc-dial-phase-v" x="' + (cx + 40) + '" y="' + (cy + 54) +
       '" text-anchor="middle">avg ' + fmtTok(tokCap) + "</text>" +
       "</svg>";
 
-    var workL = pw.workPct != null ? ("Work " + pw.workPct + "%") : "Work —";
-    var postL = pw.postPct != null ? ("Post job " + pw.postPct + "%") : "Post job —";
+    var workHas = workReasons.n > 0;
+    var postHas = postReasons.n > 0;
+    var workHead = pw.workPct != null
+      ? ("Work " + pw.workPct + "% · why not post")
+      : "Work · why not post";
+    var postHead = pw.postPct != null
+      ? ("Post " + pw.postPct + "% · why not work")
+      : "Post · why not work";
+
+    function legendCol(title, codes, shares, colors, hasData, sideClass) {
+      return (
+        '<div class="dc-reason-col ' + sideClass + '">' +
+        '<div class="dc-reason-h">' + title + "</div>" +
+        '<ul class="dc-reason-list">' +
+        codes.map(function (c, i) {
+          return (
+            '<li><i style="background:' + colors[i % colors.length] + '"></i>' +
+            '<span class="dc-reason-n">' + titleCaseCode(c) + "</span>" +
+            '<span class="dc-reason-p">' + fmtShare(shares[c], hasData) + "</span></li>"
+          );
+        }).join("") +
+        "</ul></div>"
+      );
+    }
+
     var legend =
-      '<div class="dc-dial-legend">' +
-      '<span><i class="dc-leg-work"></i>' + workL + "</span>" +
-      '<span><i class="dc-leg-post"></i>' + postL + "</span>" +
-      '<span><i class="dc-leg-fire"></i>Cycle fired</span>' +
-      '<span><i class="dc-leg-cur"></i>Current block</span>' +
+      '<div class="dc-reason-legend" aria-label="Decision reason shares">' +
+      legendCol(workHead, WORK_WHY_NOT_POST, workReasons.shares, WORK_TEAL, workHas, "is-work") +
+      legendCol(postHead, POST_WHY_NOT_WORK, postReasons.shares, POST_ORANGE, postHas, "is-post") +
       "</div>";
 
-    var bezelLine = bezel != null
-      ? ("Bezel = " + fmtInt(bezel) + " EC ≈ 1 day (est.) · tick = " +
-        (tick != null ? fmtInt(tick) + " EC" : "—"))
-      : "Bezel = — (need measured block times)";
-    var cadenceLine =
-      "Cadence " +
-      (cadence != null ? fmtInt(cadence) + " EC / cycle" : "—") +
-      " ≈ " +
-      (cycDay != null ? cycDay + " cycles / day (est.)" : "—");
-    var tokLine =
-      "≈ " +
-      (tokDay != null ? fmtInt(tokDay) + " tok / agent / day (est.)" : "— tok / agent / day (est.)");
-    var sampleLine =
-      "Live · as of block " + (height != null ? fmtInt(height) : "—");
+    function estForBlocks(nBlocks) {
+      if (avgBlock == null) return "—";
+      return fmtHumanEst(nBlocks * avgBlock);
+    }
+    function scaleRow(k, ecText, human) {
+      return (
+        '<div class="dc-scale-row">' +
+        '<span class="dc-scale-k">' + k + "</span>" +
+        '<span class="dc-scale-ec">' + ecText + "</span>" +
+        '<span class="dc-scale-h">' + human + "</span>" +
+        "</div>"
+      );
+    }
+    var tokDayLabel = "—";
+    if (tokTotal != null && Number.isFinite(Number(tokTotal))) {
+      tokDayLabel = "≈ " + fmtInt(Number(tokTotal) * DC_BEZEL_EC) + " tok / day (est.)";
+    }
+    var amberLine = "Amber ring = current EC · all agents, all cycles";
+    if (height != null && Number.isFinite(height)) amberLine += " · as of block " + fmtInt(height);
 
     var foot =
-      '<div class="dc-dial-foot">' +
-      "<div>" + bezelLine + "</div>" +
-      "<div>" + cadenceLine + "</div>" +
-      "<div>" + tokLine + "</div>" +
-      "<div>" + sampleLine + "</div>" +
-      '<p class="dc-dial-note">Everything is measured in EC (here: Monero blocks on the bezel). ' +
-      '"Day" is only a derived translation, labeled as an estimate. ' +
-      "tok/agent/day est = avg tok/cycle × cycles/day est. " +
-      "Ring = Decision=work|post mix from /cycles. Center = DC token phase averages.</p>" +
-      "</div>";
+      '<div class="dc-scale" aria-label="Fixed EC bezel with live human-time estimates">' +
+      scaleRow("Short tick", "1 EC = 10 blocks", estForBlocks(DC_BLOCKS_PER_EC)) +
+      scaleRow("Long tick", "6 EC = 60 blocks", estForBlocks(DC_LONG_TICK_EC * DC_BLOCKS_PER_EC)) +
+      scaleRow("Full turn", "72 EC = 720 blocks", estForBlocks(DC_BEZEL_EC * DC_BLOCKS_PER_EC)) +
+      scaleRow("Per agent", "1 cycle / EC → 72 cycles", tokDayLabel) +
+      "</div>" +
+      '<p class="dc-dial-note">EC counts are fixed. Human-time estimates recompute from recent block times on the economy\'s node (sample: ' +
+      fmtBlockSample(avgBlock) + ").</p>" +
+      '<p class="dc-dial-note dc-dial-amber">' + amberLine + ".</p>";
 
     host.innerHTML =
       '<div class="dc-dial">' + svg + legend + foot + renderDcAgentsBelow(dc) + "</div>";
@@ -420,12 +562,18 @@
 
   function fmtAvgEc(ec) {
     // Prefer explicit avg duration fields; never invent.
+    // Bryan lock: 1 EC = 10 Monero blocks → AVG EC = avg_ec_seconds or avg_block_seconds * 10.
     if (!ec) return null;
     var secs =
+      ec.avg_ec_seconds != null ? Number(ec.avg_ec_seconds) :
       ec.avg_wall_clock_seconds != null ? Number(ec.avg_wall_clock_seconds) :
       ec.wall_clock_seconds != null ? Number(ec.wall_clock_seconds) :
       ec.avg_duration_seconds != null ? Number(ec.avg_duration_seconds) :
       null;
+    if (secs == null && ec.avg_block_seconds != null && Number.isFinite(Number(ec.avg_block_seconds))) {
+      var blocks = ec.ec_blocks != null && Number(ec.ec_blocks) > 0 ? Number(ec.ec_blocks) : 10;
+      secs = Number(ec.avg_block_seconds) * blocks;
+    }
     if (secs != null && Number.isFinite(secs) && secs > 0) {
       if (secs < 90) return Math.round(secs) + "s";
       if (secs < 3600) return (Math.round((secs / 60) * 10) / 10) + "m";
@@ -505,7 +653,7 @@
         '" text-anchor="middle" dominant-baseline="middle">♥</text>'
       );
       svg.innerHTML =
-        '<title id="ec-dial-title">Block Cycle · Monero Block N to Block N+10 yields one Heartbeat</title>' +
+        '<title id="ec-dial-title">Economic Cycle · 1 EC = 10 Monero blocks (N→N+10); Heartbeat fires each EC</title>' +
         '<defs><filter id="ec-glow" x="-40%" y="-40%" width="180%" height="180%">' +
         '<feGaussianBlur stdDeviation="2.4" result="b"/>' +
         '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>' +
@@ -518,13 +666,24 @@
     if (avg) setText("cycle-ec-duration", avg, false);
     else setText("cycle-ec-duration", "not measured", true);
 
-    // EC/t — honest
+    // ECs/24h — Bryan lock: 1 EC = 10 Monero blocks.
+    // Formula: (86400/avg_block_seconds)/10 == blocks_per_day/10.
     var rateVal =
-      ec && ec.ec_per_time != null ? Number(ec.ec_per_time) :
-      ec && ec.ec_per_hour != null ? Number(ec.ec_per_hour) :
+      ec && ec.ecs_per_day != null ? Number(ec.ecs_per_day) :
+      ec && ec.ec_per_day != null ? Number(ec.ec_per_day) :
       null;
-    if (rateVal != null && Number.isFinite(rateVal)) setText("cycle-ec-rate", String(rateVal), false);
-    else setText("cycle-ec-rate", "not measured", true);
+    if (rateVal == null && ec && ec.blocks_per_day_est != null && Number.isFinite(Number(ec.blocks_per_day_est))) {
+      var ecBlocks = ec.ec_blocks != null && Number(ec.ec_blocks) > 0 ? Number(ec.ec_blocks) : 10;
+      rateVal = Number(ec.blocks_per_day_est) / ecBlocks;
+    }
+    if (rateVal == null && ec && ec.ec_per_time != null) rateVal = Number(ec.ec_per_time);
+    if (rateVal == null && ec && ec.ec_per_hour != null) rateVal = Number(ec.ec_per_hour);
+    if (rateVal != null && Number.isFinite(rateVal) && rateVal > 0) {
+      var rateTxt = (Math.round(rateVal * 10) / 10).toString();
+      setText("cycle-ec-rate", rateTxt, false);
+    } else {
+      setText("cycle-ec-rate", "not measured", true);
+    }
 
     if (height != null && Number.isFinite(height)) setText("cycle-ec-height", String(Math.round(height)), false);
     else setText("cycle-ec-height", "—", true);
@@ -549,8 +708,8 @@
     var wallNote = document.getElementById("cycle-ec-wall-note");
     if (wallNote) {
       wallNote.textContent = avg
-        ? "Wall-clock between Block Cycle boundaries."
-        : "Wall-clock Block Cycle length not measured yet — height marks position only.";
+        ? "1 EC = 10 Monero blocks. AVG EC = 10 × avg block. ECs/24h = (blocks/day)÷10. Heartbeat fires each EC."
+        : "Wall-clock AVG EC not measured yet — height marks position only.";
     }
 
     // Per-segment breakdown: sequential 0..9; empty stubs when unpublished
@@ -984,7 +1143,7 @@
     var dcNote = document.getElementById("cycle-dc-note");
     if (dcNote) {
       dcNote.textContent =
-        "Center: DC token phases. Ring: work vs post mix. Bezel: day in EC (blocks) with cycle fires + current block.";
+        "Center: live avg tok. Ring: live work vs post reason mix. Bezel: 72 EC (1 tick = 1 EC). Human times are estimates from recent block times.";
     }
     var ec = d.economic_cycle || {};
     renderDcRing(dc, ec);
@@ -994,7 +1153,7 @@
       setText(
         "cycle-ec-status",
         "height " + ec.current_height +
-          " · Block Cycle " + ec.ec_index +
+          " · EC " + ec.ec_index +
           " · block " + ec.block_in_ec + "/" + (ec.ec_blocks || 10),
         false
       );
@@ -1004,10 +1163,10 @@
     var ecNote = document.getElementById("cycle-ec-note");
     if (ecNote) {
       ecNote.textContent =
-        "Block Cycle = 10 Monero blocks. One Heartbeat at Block N+10 wakes the Decision Cycle. Position from daemon height.";
+        "1 EC = 10 Monero blocks (N→N+10). Heartbeat fires each EC. ECs/24h from monerod. Position from daemon height.";
     }
     var cap = document.getElementById("cycle-ec-caption");
-    if (cap) cap.textContent = "Settle returns to the Block Cycle (Block N+10).";
+    if (cap) cap.textContent = "Settle returns to the Economic Cycle clock (next EC / Block N+10).";
     renderEcClock(ec);
 
     var metabolism = buildMetabolism(d, jobs, events && events.data);

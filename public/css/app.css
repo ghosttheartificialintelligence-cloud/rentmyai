@@ -370,6 +370,27 @@ a:hover { text-decoration: underline; }
 .dot-submitted { background: #d29922; }
 .dot-paid { background: #8b949e; }
 .dot-other { background: #6e7681; }
+.legend.board-counts strong {
+  color: var(--title);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
+}
+.legend .board-total {
+  color: var(--title);
+  font-weight: 600;
+  margin-right: 4px;
+}
+.legend .board-assert {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.legend .board-assert.ok { color: #3fb950; }
+.legend .board-assert.fail { color: #f85149; }
+.legend.board-counts.unavailable strong { color: var(--muted); }
+
 
 .board-scroll {
   height: 480px;
@@ -837,11 +858,11 @@ footer.site a { color: var(--muted); }
 
 /* Bryan DC dial (work/post ring + day bezel + token hub) */
 .dc-ring-wrap { margin: 8px 0 4px; min-height: 200px; }
-.dc-dial { max-width: 320px; margin: 0 auto; }
+.dc-dial { max-width: 420px; margin: 0 auto; }
 .dc-dial-svg { display: block; margin: 0 auto; max-width: 300px; }
-.dc-dial-tick { stroke: #8b949e; stroke-width: 1.5; }
-.dc-dial-fire { fill: #a371f7; }
-.dc-dial-current { fill: none; }
+.dc-dial-tick { stroke: #6e7681; stroke-width: 0.8; }
+.dc-dial-tick-long { stroke: #c9d1d9; stroke-width: 1.7; }
+.dc-dial-current { fill: #0d1117; }
 .dc-dial-total {
   fill: #e6edf3; font-size: 22px; font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -881,6 +902,63 @@ footer.site a { color: var(--muted); }
 .dc-dial-note {
   margin: 8px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted);
   font-family: var(--sans);
+}
+.dc-dial-amber { margin-top: 4px; color: var(--title); }
+.dc-scale {
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--title);
+}
+.dc-scale-row {
+  display: grid;
+  grid-template-columns: 5.4rem minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 2px 0;
+}
+.dc-scale-k { font-weight: 600; color: var(--title); }
+.dc-scale-ec { color: var(--muted); }
+.dc-scale-h { color: var(--muted); text-align: right; white-space: nowrap; }
+@media (max-width: 420px) {
+  .dc-scale-row { grid-template-columns: 1fr auto; }
+  .dc-scale-k { grid-column: 1 / -1; }
+  .dc-scale-h { white-space: normal; text-align: right; }
+}
+.dc-dial { max-width: 420px; }
+.dc-reason-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 18px;
+  margin: 14px 0 6px;
+  text-align: left;
+}
+.dc-reason-h {
+  font-size: 12px; font-weight: 700; color: var(--title);
+  margin-bottom: 6px; line-height: 1.3;
+}
+.dc-reason-col.is-work .dc-reason-h { color: #3fb950; }
+.dc-reason-col.is-post .dc-reason-h { color: #f0883e; }
+.dc-reason-list {
+  list-style: none; margin: 0; padding: 0;
+  font-size: 12px; color: var(--title);
+}
+.dc-reason-list li {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 2px 0;
+}
+.dc-reason-list i {
+  display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+}
+.dc-reason-n { color: var(--title); }
+.dc-reason-p {
+  font-family: var(--mono); color: var(--muted); font-size: 11px;
+}
+@media (max-width: 560px) {
+  .dc-reason-legend { grid-template-columns: 1fr; }
 }
 .dc-empty { text-align: center; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .dc-empty-ring {
