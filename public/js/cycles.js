@@ -209,26 +209,27 @@
     );
   }
 
-  /* Block-native Decision Cycle dial.
-     Bezel is fixed in EC: 72 ticks (1 EC each), long tick every 6 EC, full turn = 72 EC = 720 blocks.
-     1 EC = 10 Monero blocks. Tick geometry never follows wall-clock hours.
-     Human-time labels float from recent avg_block_seconds. ecs_per_day stays on the EC clock, not this bezel.
-     Inner ring = live Work/Post reason_mix. Center = live avg tok. Sketch % are layout only. */
+  /* Decision Gauge — paper layout, live numbers.
+     Bezel: 72 ticks (1 EC), long tick every 6 EC. Compass labels are EC first, hours float.
+     Purple ring: four steps. Decide (top-left) is the live work/post reason slice.
+     Darker teal/coral = more common reason. Sketch 62/38 and sample tok are not used. */
   var DC_BEZEL_EC = 72;
   var DC_LONG_TICK_EC = 6;
   var DC_BLOCKS_PER_EC = 10;
   var WORK_WHY_NOT_POST = [
     "need", "alignment", "cost", "value", "spec",
-    "pending", "judge", "market", "other", "timing"
+    "judge", "pending", "market", "timing", "other"
   ];
-  var POST_WHY_NOT_WORK = ["fit", "vague", "margin", "capacity", "other"];
-  var WORK_TEAL = [
-    "#1f6f5a", "#238b6d", "#2ea043", "#3fb950", "#56d364",
-    "#7ee787", "#3d9a78", "#2d8a6a", "#4ac28a", "#6fddb0"
+  var POST_WHY_NOT_WORK = ["fit", "margin", "capacity", "vague", "other"];
+  /* Index 0 is darkest. Rank assigns darkest to the most common reason. */
+  var TEAL_DARK_TO_LIGHT = [
+    "#0e3b30", "#145c48", "#1a7a5c", "#218a68", "#2ea043",
+    "#3fb950", "#56d364", "#7ee787", "#a7f3c4", "#d1fae0"
   ];
-  var POST_ORANGE = [
-    "#da3633", "#f85149", "#f0883e", "#ffa657", "#d4a27f"
+  var CORAL_DARK_TO_LIGHT = [
+    "#9a3412", "#c2410c", "#ea580c", "#f97316", "#fb923c", "#fdba74", "#fed7aa"
   ];
+  var STEP_PURPLE = { discover: "#8b7cf6", capability: "#7a68e8", economics: "#6a58d4" };
 
   function reasonMixSide(dc, key, codes) {
     var rm = (dc && dc.reason_mix && dc.reason_mix[key]) || null;
@@ -302,6 +303,27 @@
     return (Math.round((avgBlockSeconds / 60) * 10) / 10).toFixed(1) + " min / block";
   }
 
+  function fmtCompassHours(seconds) {
+    if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return "≈ —";
+    var h = Math.round((seconds / 3600) * 10) / 10;
+    var hs = Math.abs(h - Math.round(h)) < 0.05 ? String(Math.round(h)) : String(h);
+    return "≈ " + hs + " h";
+  }
+
+  /* Darker palette entry = more common. Unused codes stay the lightest swatch. */
+  function shadeByCount(codes, counts, palette) {
+    var present = codes.filter(function (c) { return (counts[c] || 0) > 0; });
+    present.sort(function (a, b) { return (counts[b] || 0) - (counts[a] || 0); });
+    var map = {};
+    var light = palette[palette.length - 1];
+    codes.forEach(function (c) { map[c] = light; });
+    present.forEach(function (c, i) {
+      var idx = present.length === 1 ? 0 : Math.round((i * (palette.length - 1)) / (present.length - 1));
+      map[c] = palette[idx];
+    });
+    return map;
+  }
+
   function dcEcIndex(dial, ec, height) {
     if (dial && dial.current_ec_index != null && Number.isFinite(Number(dial.current_ec_index))) {
       return Number(dial.current_ec_index);
@@ -369,57 +391,82 @@
     var workReasons = reasonMixSide(dc, "work_why_not_post", WORK_WHY_NOT_POST);
     var postReasons = reasonMixSide(dc, "post_why_not_work", POST_WHY_NOT_WORK);
 
-    var size = 300;
+    var size = 520;
     var cx = size / 2;
     var cy = size / 2;
-    var bezelR = 138;
-    var ringR = 112;
-    var ringStroke = 24;
-    var hubR = 78;
+    var bezelR = 156;
+    var labelR = 186;
+    var ringR = 118;
+    var ringStroke = 40;
+    var hubR = 96;
 
-    var workPct = pw.workPct != null ? pw.workPct : 0;
-    var postPct = pw.postPct != null ? pw.postPct : 0;
-    var workDeg = pw.total ? (workPct / 100) * 360 : 0;
-    var postDeg = pw.total ? (postPct / 100) * 360 : 0;
+    var workShades = shadeByCount(WORK_WHY_NOT_POST, workReasons.counts, TEAL_DARK_TO_LIGHT);
+    var postShades = shadeByCount(POST_WHY_NOT_WORK, postReasons.counts, CORAL_DARK_TO_LIGHT);
 
-    function segmentedArc(startDeg, totalDeg, codes, counts, colors, classPrefix) {
+    function arcStroke(startDeg, endDeg, color, cls, title) {
+      if (endDeg - startDeg < 0.25) return "";
+      return (
+        '<path class="' + cls + '" d="' + describeArc(cx, cy, ringR, startDeg, endDeg) +
+        '" fill="none" stroke="' + color + '" stroke-width="' + ringStroke +
+        '" stroke-linecap="butt">' +
+        (title ? ("<title>" + title + "</title>") : "") +
+        "</path>"
+      );
+    }
+
+    function reasonSpan(startDeg, span, codes, counts, shades, fallback, cls) {
+      if (span < 0.25) return "";
+      var active = [];
+      var sum = 0;
+      codes.forEach(function (c) {
+        var n = counts[c] || 0;
+        if (n > 0) { active.push(c); sum += n; }
+      });
+      if (!active.length || sum <= 0) return arcStroke(startDeg, startDeg + span, fallback, cls, "");
       var html = "";
-      if (totalDeg < 0.5) return html;
-      var sum = codes.reduce(function (a, c) { return a + (counts[c] || 0); }, 0);
-      if (sum <= 0) {
-        // Honest: side exists in mix but no reason codes → solid muted segment
-        html +=
-          '<path class="' + classPrefix + '-empty" d="' + describeArc(cx, cy, ringR, startDeg, startDeg + totalDeg) +
-          '" fill="none" stroke="#30363d" stroke-width="' + ringStroke +
-          '" stroke-linecap="butt"/>';
-        return html;
-      }
       var cursor = startDeg;
-      codes.forEach(function (c, i) {
-        var cnt = counts[c] || 0;
-        if (cnt <= 0) return;
-        var seg = (cnt / sum) * totalDeg;
-        if (seg < 0.35) seg = 0.35;
-        var col = colors[i % colors.length];
-        html +=
-          '<path class="' + classPrefix + '-' + c + '" d="' +
-          describeArc(cx, cy, ringR, cursor, cursor + seg) +
-          '" fill="none" stroke="' + col + '" stroke-width="' + ringStroke +
-          '" stroke-linecap="butt">' +
-          '<title>' + titleCaseCode(c) + " · " + cnt + "</title></path>";
-        cursor += seg;
+      active.forEach(function (c, i) {
+        var end = i === active.length - 1 ? startDeg + span : cursor + ((counts[c] / sum) * span);
+        html += arcStroke(cursor, end, shades[c], cls + "-" + c, titleCaseCode(c) + " · " + counts[c]);
+        cursor = end;
       });
       return html;
     }
 
+    // Quadrants clockwise from 12: Discover, Capability, Economics, Decide (top-left).
     var ringPaths = "";
+    ringPaths += arcStroke(0, 90, STEP_PURPLE.discover, "dc-step-discover", "Discover");
+    ringPaths += arcStroke(90, 180, STEP_PURPLE.capability, "dc-step-capability", "Capability");
+    ringPaths += arcStroke(180, 270, STEP_PURPLE.economics, "dc-step-economics", "Economics");
+    var decideStart = 270;
+    var decideSpan = 90;
     if (!pw.total) {
-      ringPaths =
-        '<circle cx="' + cx + '" cy="' + cy + '" r="' + ringR +
-        '" fill="none" stroke="#30363d" stroke-width="' + ringStroke + '"/>';
+      ringPaths += arcStroke(decideStart, decideStart + decideSpan, "#5b4bc4", "dc-step-decide", "Decide");
     } else {
-      ringPaths += segmentedArc(0, workDeg, WORK_WHY_NOT_POST, workReasons.counts, WORK_TEAL, "dc-w");
-      ringPaths += segmentedArc(workDeg, postDeg, POST_WHY_NOT_WORK, postReasons.counts, POST_ORANGE, "dc-p");
+      var workSpan = decideSpan * (pw.work / pw.total);
+      var postSpan = decideSpan * (pw.post / pw.total);
+      ringPaths += reasonSpan(decideStart, workSpan, WORK_WHY_NOT_POST, workReasons.counts, workShades, "#1a7a5c", "dc-w");
+      ringPaths += reasonSpan(decideStart + workSpan, postSpan, POST_WHY_NOT_WORK, postReasons.counts, postShades, "#f97316", "dc-p");
+    }
+
+    function stepLabel(name, tok, deg) {
+      var p = polarDeg(cx, cy, ringR, deg);
+      return (
+        '<text class="dc-step-name" x="' + p.x + '" y="' + (p.y - 7) + '" text-anchor="middle">' + name + "</text>" +
+        '<text class="dc-step-avg" x="' + p.x + '" y="' + (p.y + 9) + '" text-anchor="middle">avg ' + fmtTok(tok) + "</text>"
+      );
+    }
+
+    function compassLabel(ecCount, deg) {
+      var p = polarDeg(cx, cy, labelR, deg);
+      var anchor = deg === 90 ? "start" : deg === 270 ? "end" : "middle";
+      var x = p.x + (deg === 90 ? 4 : deg === 270 ? -4 : 0);
+      var y = p.y + (deg === 0 ? -2 : deg === 180 ? 2 : 0);
+      var hours = avgBlock == null ? "≈ —" : fmtCompassHours(ecCount * DC_BLOCKS_PER_EC * avgBlock);
+      return (
+        '<text class="dc-compass-ec" x="' + x + '" y="' + (y - 7) + '" text-anchor="' + anchor + '">' + ecCount + " EC</text>" +
+        '<text class="dc-compass-h" x="' + x + '" y="' + (y + 8) + '" text-anchor="' + anchor + '">' + hours + "</text>"
+      );
     }
 
     // Fixed bezel: 72 ticks = 72 EC. Long tick every 6 EC. Spacing does not follow block time.
@@ -441,59 +488,46 @@
       var cp = polarDeg(cx, cy, bezelR, cang);
       curMark =
         '<circle class="dc-dial-current" cx="' + cp.x + '" cy="' + cp.y +
-        '" r="5.2" fill="#0d1117" stroke="#f0b429" stroke-width="2"/>';
+        '" r="6" fill="#0d1117" stroke="#f0883e" stroke-width="2.4"/>';
     }
 
-    // Center: total absolute middle; phases at four corners of hub
     var svg =
       '<svg class="dc-dial-svg" viewBox="0 0 ' + size + " " + size +
-      '" width="100%" role="img" aria-label="Decision Cycle dial, 72 EC per turn, one tick per EC">' +
+      '" width="100%" role="img" aria-label="Decision gauge. 72 EC per turn, one tick per EC. Orange ring is the current EC.">' +
       '<circle class="dc-dial-bezel" cx="' + cx + '" cy="' + cy + '" r="' + bezelR +
       '" fill="none" stroke="#3a424c" stroke-width="1.5"/>' +
       ticks +
+      compassLabel(72, 0) +
+      compassLabel(18, 90) +
+      compassLabel(36, 180) +
+      compassLabel(54, 270) +
       ringPaths +
       '<circle cx="' + cx + '" cy="' + cy + '" r="' + hubR +
       '" fill="#0d1117" stroke="#21262d" stroke-width="1"/>' +
-      curMark +
-      '<text class="dc-dial-total" x="' + cx + '" y="' + (cy + 2) +
+      stepLabel("Discover", tokDiscover, 45) +
+      stepLabel("Capability", tokCap, 135) +
+      stepLabel("Economics", tokEcon, 225) +
+      stepLabel("Decide", tokDecide, 315) +
+      '<text class="dc-dial-total" x="' + cx + '" y="' + (cy - 2) +
       '" text-anchor="middle" dominant-baseline="middle">' + fmtTok(tokTotal) + "</text>" +
-      '<text class="dc-dial-total-sub" x="' + cx + '" y="' + (cy + 18) +
+      '<text class="dc-dial-total-sub" x="' + cx + '" y="' + (cy + 16) +
       '" text-anchor="middle">avg tok / cycle</text>' +
-      '<text class="dc-dial-phase" x="' + (cx - 40) + '" y="' + (cy - 42) +
-      '" text-anchor="middle">Decide</text>' +
-      '<text class="dc-dial-phase-v" x="' + (cx - 40) + '" y="' + (cy - 28) +
-      '" text-anchor="middle">avg ' + fmtTok(tokDecide) + "</text>" +
-      '<text class="dc-dial-phase" x="' + (cx + 40) + '" y="' + (cy - 42) +
-      '" text-anchor="middle">Discover</text>' +
-      '<text class="dc-dial-phase-v" x="' + (cx + 40) + '" y="' + (cy - 28) +
-      '" text-anchor="middle">avg ' + fmtTok(tokDiscover) + "</text>" +
-      '<text class="dc-dial-phase" x="' + (cx - 40) + '" y="' + (cy + 40) +
-      '" text-anchor="middle">Economics</text>' +
-      '<text class="dc-dial-phase-v" x="' + (cx - 40) + '" y="' + (cy + 54) +
-      '" text-anchor="middle">avg ' + fmtTok(tokEcon) + "</text>" +
-      '<text class="dc-dial-phase" x="' + (cx + 40) + '" y="' + (cy + 40) +
-      '" text-anchor="middle">Capability</text>' +
-      '<text class="dc-dial-phase-v" x="' + (cx + 40) + '" y="' + (cy + 54) +
-      '" text-anchor="middle">avg ' + fmtTok(tokCap) + "</text>" +
+      curMark +
       "</svg>";
 
     var workHas = workReasons.n > 0;
     var postHas = postReasons.n > 0;
-    var workHead = pw.workPct != null
-      ? ("Work " + pw.workPct + "% · why not post")
-      : "Work · why not post";
-    var postHead = pw.postPct != null
-      ? ("Post " + pw.postPct + "% · why not work")
-      : "Post · why not work";
+    var workHead = pw.workPct != null ? ("Why not post · " + pw.workPct + "%") : "Why not post";
+    var postHead = pw.postPct != null ? ("Why not work · " + pw.postPct + "%") : "Why not work";
 
-    function legendCol(title, codes, shares, colors, hasData, sideClass) {
+    function legendCol(title, codes, shares, shades, hasData, sideClass) {
       return (
         '<div class="dc-reason-col ' + sideClass + '">' +
         '<div class="dc-reason-h">' + title + "</div>" +
         '<ul class="dc-reason-list">' +
-        codes.map(function (c, i) {
+        codes.map(function (c) {
           return (
-            '<li><i style="background:' + colors[i % colors.length] + '"></i>' +
+            '<li><i style="background:' + shades[c] + '"></i>' +
             '<span class="dc-reason-n">' + titleCaseCode(c) + "</span>" +
             '<span class="dc-reason-p">' + fmtShare(shares[c], hasData) + "</span></li>"
           );
@@ -503,44 +537,23 @@
     }
 
     var legend =
+      '<div class="dc-key" aria-label="Gauge colors">' +
+      '<span><i class="dc-key-steps"></i>The 4 steps</span>' +
+      '<span><i class="dc-key-work"></i>Chose work</span>' +
+      '<span><i class="dc-key-post"></i>Chose post</span>' +
+      '<span><i class="dc-key-now"></i>Current EC (now)</span>' +
+      "</div>" +
       '<div class="dc-reason-legend" aria-label="Decision reason shares">' +
-      legendCol(workHead, WORK_WHY_NOT_POST, workReasons.shares, WORK_TEAL, workHas, "is-work") +
-      legendCol(postHead, POST_WHY_NOT_WORK, postReasons.shares, POST_ORANGE, postHas, "is-post") +
+      legendCol(workHead, WORK_WHY_NOT_POST, workReasons.shares, workShades, workHas, "is-work") +
+      legendCol(postHead, POST_WHY_NOT_WORK, postReasons.shares, postShades, postHas, "is-post") +
       "</div>";
 
-    function estForBlocks(nBlocks) {
-      if (avgBlock == null) return "—";
-      return fmtHumanEst(nBlocks * avgBlock);
-    }
-    function scaleRow(k, ecText, human) {
-      return (
-        '<div class="dc-scale-row">' +
-        '<span class="dc-scale-k">' + k + "</span>" +
-        '<span class="dc-scale-ec">' + ecText + "</span>" +
-        '<span class="dc-scale-h">' + human + "</span>" +
-        "</div>"
-      );
-    }
-    var tokDayLabel = "—";
-    if (tokTotal != null && Number.isFinite(Number(tokTotal))) {
-      tokDayLabel = "≈ " + fmtInt(Number(tokTotal) * DC_BEZEL_EC) + " tok / day (est.)";
-    }
-    var amberLine = "Amber ring = current EC · all agents, all cycles";
-    if (height != null && Number.isFinite(height)) amberLine += " · as of block " + fmtInt(height);
-
+    var asOf = height != null && Number.isFinite(height) ? (" As of block " + fmtInt(height) + ".") : "";
     var foot =
-      '<div class="dc-scale" aria-label="Fixed EC bezel with live human-time estimates">' +
-      scaleRow("Short tick", "1 EC = 10 blocks", estForBlocks(DC_BLOCKS_PER_EC)) +
-      scaleRow("Long tick", "6 EC = 60 blocks", estForBlocks(DC_LONG_TICK_EC * DC_BLOCKS_PER_EC)) +
-      scaleRow("Full turn", "72 EC = 720 blocks", estForBlocks(DC_BEZEL_EC * DC_BLOCKS_PER_EC)) +
-      scaleRow("Per agent", "1 cycle / EC → 72 cycles", tokDayLabel) +
-      "</div>" +
-      '<p class="dc-dial-note">EC counts are fixed. Human-time estimates recompute from recent block times on the economy\'s node (sample: ' +
-      fmtBlockSample(avgBlock) + ").</p>" +
-      '<p class="dc-dial-note dc-dial-amber">' + amberLine + ".</p>";
+      '<p class="dc-dial-note">1 EC = 10 blocks. Long tick every 6 EC. Full turn = 72 EC = 720 blocks. ' +
+      "Hours recompute from recent block times (sample: " + fmtBlockSample(avgBlock) + ")." + asOf + "</p>";
 
-    host.innerHTML =
-      '<div class="dc-dial">' + svg + legend + foot + renderDcAgentsBelow(dc) + "</div>";
+    host.innerHTML = '<div class="dc-dial">' + svg + legend + foot + "</div>";
   }
 
   function renderDcRing(dc, ec) {
@@ -1143,7 +1156,7 @@
     var dcNote = document.getElementById("cycle-dc-note");
     if (dcNote) {
       dcNote.textContent =
-        "Center: live avg tok. Ring: live work vs post reason mix. Bezel: 72 EC (1 tick = 1 EC). Human times are estimates from recent block times.";
+        "Purple ring: Discover, Capability, Economics, Decide. The Decide slice is the live work (teal) and post (coral) mix. Orange ring: current EC.";
     }
     var ec = d.economic_cycle || {};
     renderDcRing(dc, ec);
