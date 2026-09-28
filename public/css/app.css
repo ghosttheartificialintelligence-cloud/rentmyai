@@ -370,6 +370,27 @@ a:hover { text-decoration: underline; }
 .dot-submitted { background: #d29922; }
 .dot-paid { background: #8b949e; }
 .dot-other { background: #6e7681; }
+.legend.board-counts strong {
+  color: var(--title);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
+}
+.legend .board-total {
+  color: var(--title);
+  font-weight: 600;
+  margin-right: 4px;
+}
+.legend .board-assert {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.legend .board-assert.ok { color: #3fb950; }
+.legend .board-assert.fail { color: #f85149; }
+.legend.board-counts.unavailable strong { color: var(--muted); }
+
 
 .board-scroll {
   height: 480px;
@@ -834,6 +855,146 @@ footer.site a { color: var(--muted); }
 
 /* ── Cycles extras (Decision ring + EC stub) ── */
 .dc-ring-wrap { margin: 12px 0 8px; min-height: 160px; }
+
+/* Bryan DC dial (work/post ring + day bezel + token hub) */
+.dc-ring-wrap { margin: 8px 0 4px; min-height: 200px; }
+.dc-dial { max-width: 520px; margin: 0 auto; }
+.dc-dial-svg { display: block; margin: 0 auto; max-width: 460px; }
+.dc-dial-tick { stroke: #6e7681; stroke-width: 0.8; }
+.dc-dial-tick-long { stroke: #c9d1d9; stroke-width: 1.7; }
+.dc-dial-current { fill: #0d1117; }
+.dc-dial-total {
+  fill: #e6edf3; font-size: 22px; font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.dc-dial-total-sub {
+  fill: #8b949e; font-size: 9px; letter-spacing: 0.04em;
+}
+.dc-compass-ec {
+  fill: #e6edf3; font-size: 13px; font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.dc-compass-h {
+  fill: #8b949e; font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.dc-step-name, .dc-step-avg {
+  fill: #f8fafc;
+  font-family: var(--sans, ui-sans-serif, system-ui, sans-serif);
+  paint-order: stroke fill;
+  stroke: #0d1117;
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+}
+.dc-step-name { font-size: 13px; font-weight: 700; }
+.dc-step-avg {
+  font-size: 11px; font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.dc-key {
+  display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center;
+  margin: 8px 0 2px; font-size: 12px; color: var(--title);
+}
+.dc-key i {
+  display: inline-block; width: 10px; height: 10px; margin-right: 6px;
+  vertical-align: -1px; border-radius: 2px;
+}
+.dc-key-steps { background: #7a68e8; }
+.dc-key-work { background: #1a7a5c; }
+.dc-key-post { background: #f97316; }
+.dc-key-now {
+  background: transparent; border: 2px solid #f0883e; border-radius: 50%;
+  width: 8px; height: 8px; box-sizing: border-box;
+}
+.dc-print { margin: 16px 0 2px; font-size: 14px; }
+.dc-print a {
+  color: var(--title); font-weight: 600;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.dc-print a:hover { color: var(--blue, #58a6ff); }
+.dc-dial-legend {
+  display: flex; flex-wrap: wrap; gap: 10px 14px; justify-content: center;
+  margin: 12px 0 8px; font-size: 12px; color: var(--title);
+}
+.dc-dial-legend i {
+  display: inline-block; width: 10px; height: 10px; margin-right: 6px;
+  vertical-align: -1px; border-radius: 2px;
+}
+.dc-leg-work { background: #3fb950; }
+.dc-leg-post { background: #f0883e; }
+.dc-leg-fire {
+  background: #a371f7; border-radius: 50% !important; width: 8px !important; height: 8px !important;
+}
+.dc-leg-cur {
+  background: transparent !important; border: 2px solid #f0883e; border-radius: 50% !important;
+  width: 8px !important; height: 8px !important; box-sizing: border-box;
+}
+.dc-dial-foot {
+  margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--muted);
+  font-family: var(--mono);
+}
+.dc-dial-foot div { margin: 2px 0; }
+.dc-dial-note {
+  margin: 8px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted);
+  font-family: var(--sans);
+}
+.dc-dial-amber { margin-top: 4px; color: var(--title); }
+.dc-scale {
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--title);
+}
+.dc-scale-row {
+  display: grid;
+  grid-template-columns: 5.4rem minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 2px 0;
+}
+.dc-scale-k { font-weight: 600; color: var(--title); }
+.dc-scale-ec { color: var(--muted); }
+.dc-scale-h { color: var(--muted); text-align: right; white-space: nowrap; }
+@media (max-width: 420px) {
+  .dc-scale-row { grid-template-columns: 1fr auto; }
+  .dc-scale-k { grid-column: 1 / -1; }
+  .dc-scale-h { white-space: normal; text-align: right; }
+}
+.dc-dial { max-width: 520px; }
+.dc-reason-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 18px;
+  margin: 14px 0 6px;
+  text-align: left;
+}
+.dc-reason-h {
+  font-size: 12px; font-weight: 700; color: var(--title);
+  margin-bottom: 6px; line-height: 1.3;
+}
+.dc-reason-col.is-work .dc-reason-h { color: #3fb950; }
+.dc-reason-col.is-post .dc-reason-h { color: #fb923c; }
+.dc-reason-list {
+  list-style: none; margin: 0; padding: 0;
+  font-size: 12px; color: var(--title);
+}
+.dc-reason-list li {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 2px 0;
+}
+.dc-reason-list i {
+  display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+}
+.dc-reason-n { color: var(--title); }
+.dc-reason-p {
+  font-family: var(--mono); color: var(--muted); font-size: 11px;
+}
+@media (max-width: 560px) {
+  .dc-reason-legend { grid-template-columns: 1fr; }
+}
 .dc-empty { text-align: center; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .dc-empty-ring {
   width: 110px; height: 110px; margin: 8px auto 12px;
@@ -841,6 +1002,53 @@ footer.site a { color: var(--muted); }
   border: 3px dashed var(--line);
   background: radial-gradient(circle at center, transparent 48%, var(--panel-2) 49%);
 }
+
+/* Decision Cycle post vs work meter (live /cycles by_decision) */
+.dc-pw { margin: 8px 0 4px; }
+.dc-pw-head {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+}
+.dc-pw-bar {
+  display: flex; height: 14px; border-radius: 999px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--panel-2);
+}
+.dc-pw-bar-empty { opacity: 0.45; }
+.dc-pw-post { background: #f0883e; min-width: 0; }
+.dc-pw-work { background: #238636; min-width: 0; }
+.dc-pw-counts {
+  display: flex; justify-content: space-between; gap: 12px;
+  margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--title);
+}
+.dc-pw-post-l b { color: #f0883e; }
+.dc-pw-work-l b { color: #3fb950; }
+.dc-pw-agents {
+  margin-top: 10px; display: grid; gap: 4px;
+  font-size: 12px; color: var(--muted);
+}
+.dc-pw-agent {
+  display: flex; justify-content: space-between; gap: 10px;
+  border-top: 1px solid var(--line); padding-top: 4px;
+}
+.dc-pw-agent-n { color: var(--title); font-weight: 600; }
+.dc-pw-agent-v { font-family: var(--mono); font-size: 11px; }
+.dc-pw-note {
+  margin: 10px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted);
+}
+
+/* Post vs work circular ring (live decision_mix) */
+.dc-ring-pw {
+  /* labels sit on colored wedges — light text for contrast */
+}
+.dc-ring-pw .dc-seg-label,
+.dc-ring-pw .dc-seg-val {
+  color: #0d1117;
+  text-shadow: 0 0 4px rgba(255,255,255,0.55);
+}
+.dc-ring-wrap .dc-pw {
+  margin-top: 12px;
+}
+.dc-ring-wrap .dc-pw-head { display: none; }
 .dc-ring {
   position: relative;
   width: 180px; height: 180px;

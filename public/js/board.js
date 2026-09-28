@@ -1,11 +1,49 @@
 /* Public job board. No Bearer token. Static host only.
-   Never invent jobs. On fetch fail: Data unavailable and/or last-known snapshot. */
+   Never invent jobs. On fetch fail: Data unavailable and/or last-known snapshot.
+   Category counts (Bryan 2026-09-27): Open / Accepted / Submitted / Paid
+   must sum exactly to total jobs ever on /board. */
 (function () {
+  var CATEGORY_STATUSES = {
+    open: { open: 1, pending_stamp: 1 },
+    accepted: { in_progress: 1, claimed: 1, work_submitted: 1 },
+    submitted: {
+      submitted: 1,
+      awaiting_settlement: 1,
+      settling: 1,
+      prize_pending: 1
+    },
+    paid: {
+      paid: 1,
+      settled: 1,
+      closed: 1,
+      cancelled: 1,
+      canceled: 1
+    }
+  };
+
+  var statusToCategory = {};
+  Object.keys(CATEGORY_STATUSES).forEach(function (cat) {
+    Object.keys(CATEGORY_STATUSES[cat]).forEach(function (st) {
+      statusToCategory[st] = cat;
+    });
+  });
+
   var statusClasses = {
     open: "status-open",
+    pending_stamp: "status-open",
     accepted: "status-accepted",
+    in_progress: "status-accepted",
+    claimed: "status-accepted",
+    work_submitted: "status-accepted",
     submitted: "status-submitted",
-    paid: "status-paid"
+    awaiting_settlement: "status-submitted",
+    settling: "status-submitted",
+    prize_pending: "status-submitted",
+    paid: "status-paid",
+    settled: "status-paid",
+    closed: "status-paid",
+    cancelled: "status-paid",
+    canceled: "status-paid"
   };
 
   var lastKnown = null; /* { data, source, fetchedAt, live } */
@@ -52,14 +90,95 @@
     }
   }
 
+  function categorizeStatus(raw) {
+    var st = String(raw == null ? "" : raw).toLowerCase().trim();
+    return statusToCategory[st] || null;
+  }
+
+  /** Partition every job once. Assert: open+accepted+submitted+paid === total. */
+  function countCategories(jobs) {
+    var counts = { open: 0, accepted: 0, submitted: 0, paid: 0, other: 0, total: 0 };
+    var otherStatuses = {};
+    if (!Array.isArray(jobs)) return counts;
+    counts.total = jobs.length;
+    for (var i = 0; i < jobs.length; i++) {
+      var cat = categorizeStatus(jobs[i] && jobs[i].status);
+      if (cat && Object.prototype.hasOwnProperty.call(counts, cat)) {
+        counts[cat] += 1;
+      } else {
+        counts.other += 1;
+        var key = String(jobs[i] && jobs[i].status != null ? jobs[i].status : "(null)");
+        otherStatuses[key] = (otherStatuses[key] || 0) + 1;
+      }
+    }
+    counts.sum =
+      counts.open + counts.accepted + counts.submitted + counts.paid;
+    counts.ok = counts.sum === counts.total && counts.other === 0;
+    counts.otherStatuses = otherStatuses;
+    return counts;
+  }
+
+  function setText(id, text, hold) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    if (hold) el.classList.add("hold");
+    else el.classList.remove("hold");
+  }
+
+  function renderCategoryCounts(counts, available) {
+    var wrap = document.getElementById("board-counts");
+    if (!available || !counts) {
+      setText("board-total-ever", "—", true);
+      setText("board-count-open", "—", true);
+      setText("board-count-accepted", "—", true);
+      setText("board-count-submitted", "—", true);
+      setText("board-count-paid", "—", true);
+      setText("board-count-assert", "", false);
+      if (wrap) {
+        wrap.classList.add("unavailable");
+        wrap.removeAttribute("data-assert-ok");
+      }
+      return;
+    }
+    setText("board-total-ever", String(counts.total), false);
+    setText("board-count-open", String(counts.open), false);
+    setText("board-count-accepted", String(counts.accepted), false);
+    setText("board-count-submitted", String(counts.submitted), false);
+    setText("board-count-paid", String(counts.paid), false);
+    var assertEl = document.getElementById("board-count-assert");
+    if (assertEl) {
+      if (counts.ok) {
+        assertEl.textContent =
+          "✓ " + counts.open + "+" + counts.accepted + "+" +
+          counts.submitted + "+" + counts.paid + "=" + counts.total;
+        assertEl.classList.remove("fail");
+        assertEl.classList.add("ok");
+      } else {
+        assertEl.textContent =
+          "assert fail: " + counts.sum + "≠" + counts.total +
+          (counts.other ? " · other=" + counts.other : "");
+        assertEl.classList.add("fail");
+        assertEl.classList.remove("ok");
+      }
+    }
+    if (wrap) {
+      wrap.classList.remove("unavailable");
+      wrap.setAttribute("data-assert-ok", counts.ok ? "1" : "0");
+    }
+  }
+
   function jobRow(job) {
-    var sc = statusClasses[job.status] || "status-paid";
+    var raw = job.status || "other";
+    var cat = categorizeStatus(raw);
+    var sc = statusClasses[raw] || statusClasses[cat] || "status-paid";
+    var dotClass = cat || "other";
     var rate = job.rate_max || job.rate_min || job.agreed_rate;
     var buyer = job.buyer_name || job.buyer || "";
     return "<tr>" +
       '<td><span class="status-badge ' + sc + '">' +
-        '<span class="dot dot-' + escapeHtml(job.status || "other") + '"></span>' +
-        escapeHtml(job.status || "—") +
+        '<span class="dot dot-' + escapeHtml(dotClass) + '"></span>' +
+        escapeHtml(raw || "—") +
       "</span></td>" +
       '<td><span class="job-id" title="' + escapeHtml(job.job_id) + '">' +
         escapeHtml(job.job_id) + "</span></td>" +
@@ -165,35 +284,63 @@
       lastKnown = result;
       var jobs = result.data.jobs || [];
       var total = result.data.total != null ? result.data.total : jobs.length;
+      /* Prefer jobs.length for category partition; warn if API total disagrees. */
+      var counts = countCategories(jobs);
+      if (Number(total) !== counts.total) {
+        counts.ok = false;
+        counts.apiTotal = Number(total);
+      }
       renderTable(jobs);
+      renderCategoryCounts(counts, true);
       setMcJobCounts(jobs, true);
       if (updated) {
+        var assertBit = counts.ok
+          ? " · categories OK"
+          : " · category assert fail";
         updated.textContent =
-          "live · " + total + " on board · fetched " + fmtClock(result.fetchedAt) +
-          " · " + result.source;
-        updated.classList.remove("stale", "fail");
+          "live · " + counts.total + " ever · fetched " + fmtClock(result.fetchedAt) +
+          " · " + result.source + assertBit;
+        updated.classList.toggle("fail", !counts.ok);
+        updated.classList.remove("stale");
       }
       publishBoardMeta({
         live: true,
-        count: total,
+        count: counts.total,
+        categories: {
+          open: counts.open,
+          accepted: counts.accepted,
+          submitted: counts.submitted,
+          paid: counts.paid,
+          sum: counts.sum,
+          ok: counts.ok
+        },
         source: result.source,
         fetchedAt: result.fetchedAt,
         stale: false
       });
     } else if (lastKnown) {
       var lkJobs = lastKnown.data.jobs || [];
-      var lkTotal = lastKnown.data.total != null ? lastKnown.data.total : lkJobs.length;
+      var lkCounts = countCategories(lkJobs);
       renderTable(lkJobs);
+      renderCategoryCounts(lkCounts, true);
       setMcJobCounts(lkJobs, true);
       if (updated) {
         updated.textContent =
-          "Data unavailable · showing last-known snapshot (" + lkTotal +
+          "Data unavailable · showing last-known snapshot (" + lkCounts.total +
           " jobs) from " + fmtClock(lastKnown.fetchedAt) + " · refresh failed";
         updated.classList.add("stale", "fail");
       }
       publishBoardMeta({
         live: false,
-        count: lkTotal,
+        count: lkCounts.total,
+        categories: {
+          open: lkCounts.open,
+          accepted: lkCounts.accepted,
+          submitted: lkCounts.submitted,
+          paid: lkCounts.paid,
+          sum: lkCounts.sum,
+          ok: lkCounts.ok
+        },
         source: lastKnown.source,
         fetchedAt: lastKnown.fetchedAt,
         stale: true,
@@ -201,6 +348,7 @@
       });
     } else {
       renderUnavailable("Data unavailable — board could not be loaded. No sample jobs shown.");
+      renderCategoryCounts(null, false);
       setMcJobCounts([], false);
       if (updated) {
         updated.textContent = "Data unavailable · " + fmtClock(Date.now());
@@ -210,6 +358,7 @@
       publishBoardMeta({
         live: false,
         count: null,
+        categories: null,
         source: null,
         fetchedAt: null,
         stale: true,
@@ -221,7 +370,11 @@
     if (scroll) startAutoScroll(scroll);
   }
 
-  window.RentMyAIBoard = { refresh: load };
+  window.RentMyAIBoard = {
+    refresh: load,
+    countCategories: countCategories,
+    categorizeStatus: categorizeStatus
+  };
 
   load();
   setInterval(load, REFRESH_MS);
